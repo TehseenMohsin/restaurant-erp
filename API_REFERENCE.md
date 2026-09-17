@@ -5,7 +5,7 @@
 This document defines the API standards and reference structure for the
 Restaurant ERP SaaS backend.
 
-The API is designed for:
+The API is designed for: 
 
 -   Restaurant owners
 -   Branch managers

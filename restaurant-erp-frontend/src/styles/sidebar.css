@@ -1,0 +1,46 @@
+/* Sidebar Scrollbar */
+
+.sidebar-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #888a8e #111827;
+}
+
+/* Width */
+.sidebar-scroll::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+/* Remove top & bottom arrow buttons */
+.sidebar-scroll::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+/* Track */
+.sidebar-scroll::-webkit-scrollbar-track {
+  background: #111827;
+}
+
+/* Thumb */
+.sidebar-scroll::-webkit-scrollbar-thumb {
+  background: #3b82f6;
+  border-radius: 0;
+  border: 0;
+}
+
+/* Hover */
+.sidebar-scroll::-webkit-scrollbar-thumb:hover {
+  background: #2563eb;
+}
+
+/* Active */
+.sidebar-scroll::-webkit-scrollbar-thumb:active {
+  background: #1d4ed8;
+}
+
+/* Corner */
+.sidebar-scroll::-webkit-scrollbar-corner {
+  background: #111827;
+}
