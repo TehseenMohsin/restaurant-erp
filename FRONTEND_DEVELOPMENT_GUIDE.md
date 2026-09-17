@@ -1,621 +1,1133 @@
-# Frontend Development Guide - React + Vite + Tailwind
+# Frontend Configuration
 
-## Project Structure
+This document describes the frontend development environment, project configuration, dependencies, environment variables, API communication, styling, routing, and development workflow for the Restaurant Management System.
 
+The frontend is built with React and Vite and communicates with the Spring Boot backend through REST APIs and real-time communication endpoints.
+
+---
+
+## 1. Technology Stack
+
+The frontend uses the following technologies:
+
+| Technology         | Purpose                           |
+| ------------------ | --------------------------------- |
+| React              | UI development                    |
+| Vite               | Development server and build tool |
+| JavaScript         | Application programming           |
+| Tailwind CSS       | UI styling                        |
+| Axios              | HTTP communication                |
+| React Toastify     | Notifications                     |
+| Lucide React       | Icons                             |
+| Server-Sent Events | Real-time server updates          |
+| WebSocket / SockJS | Real-time communication           |
+
+---
+
+## 2. Prerequisites
+
+Before running the frontend, install:
+
+* Node.js
+* npm
+* Git
+* Visual Studio Code or another JavaScript IDE
+
+Verify the installation:
+
+```bash
+node --version
+npm --version
 ```
-restaurant-erp-frontend/
-├── public/                    # Static assets
+
+Recommended Node.js version should be an active LTS release compatible with the project's dependencies.
+
+---
+
+## 3. Frontend Project Structure
+
+The frontend follows a feature-oriented structure.
+
+```text
+frontend/
+│
+├── public/
+│
 ├── src/
-│   ├── components/           # Reusable components
-│   │   ├── common/          # Common UI components
-│   │   │   ├── Header.jsx
-│   │   │   ├── Sidebar.jsx
-│   │   │   ├── Footer.jsx
-│   │   │   └── Loader.jsx
-│   │   ├── Auth/            # Auth components
-│   │   │   ├── LoginForm.jsx
-│   │   │   ├── SignupForm.jsx
-│   │   │   └── ProtectedRoute.jsx
-│   │   ├── Order/           # Order management
-│   │   │   ├── OrderList.jsx
-│   │   │   ├── OrderForm.jsx
-│   │   │   ├── OrderDetail.jsx
-│   │   │   └── OrderBill.jsx
-│   │   ├── Kitchen/         # Kitchen display
-│   │   │   ├── KitchenDisplay.jsx
-│   │   │   ├── OrderCard.jsx
-│   │   │   └── StationView.jsx
-│   │   ├── Table/           # Table management
-│   │   │   ├── TableLayout.jsx
-│   │   │   ├── TableDetail.jsx
-│   │   │   └── FloorPlan.jsx
-│   │   ├── Inventory/       # Inventory
-│   │   │   ├── InventoryList.jsx
-│   │   │   ├── StockAdjustment.jsx
-│   │   │   └── LowStockAlerts.jsx
-│   │   ├── Reports/         # Reports & Analytics
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── SalesReport.jsx
-│   │   │   ├── InventoryReport.jsx
-│   │   │   └── StaffReport.jsx
-│   │   └── Admin/           # Admin panels
-│   │       ├── BranchManager.jsx
-│   │       ├── UserManager.jsx
-│   │       └── Settings.jsx
-│   ├── context/             # React Context
-│   │   ├── AuthContext.jsx
-│   │   ├── OrderContext.jsx
-│   │   ├── NotificationContext.jsx
-│   │   └── AppContext.jsx
-│   ├── hooks/               # Custom hooks
-│   │   ├── useAuth.js
-│   │   ├── useApi.js
-│   │   ├── useForm.js
-│   │   ├── useNotification.js
-│   │   ├── useKitchenSocket.js
-│   │   └── useLocalStorage.js
-│   ├── services/            # API services
-│   │   ├── api/            # API endpoints
-│   │   ├── websocket/      # WebSocket services
-│   │   └── utils/          # Utilities
-│   ├── pages/               # Page components
-│   │   ├── Login.jsx
-│   │   ├── Dashboard.jsx
-│   │   ├── Orders.jsx
-│   │   ├── Kitchen.jsx
-│   │   ├── Tables.jsx
-│   │   ├── Inventory.jsx
-│   │   ├── Reports.jsx
-│   │   └── Admin.jsx
-│   ├── styles/              # CSS files
-│   │   ├── Auth.css
-│   │   ├── Dashboard.css
-│   │   ├── Order.css
-│   │   ├── Kitchen.css
-│   │   ├── Table.css
-│   │   ├── Inventory.css
-│   │   ├── Report.css
-│   │   └── Common.css
-│   ├── utils/               # Utility functions
-│   │   ├── formatters.js
-│   │   ├── validators.js
-│   │   ├── dateHelper.js
-│   │   └── constants.js
+│   │
+│   ├── assets/
+│   │
+│   ├── components/
+│   │   ├── common/
+│   │   ├── layout/
+│   │   ├── modal/
+│   │   └── table/
+│   │
+│   ├── pages/
+│   │   ├── auth/
+│   │   ├── dashboard/
+│   │   ├── organization/
+│   │   ├── branch/
+│   │   ├── subscription/
+│   │   ├── settings/
+│   │   └── ...
+│   │
+│   ├── services/
+│   │   ├── axiosClient.js
+│   │   └── ...
+│   │
+│   ├── hooks/
+│   │
+│   ├── context/
+│   │
+│   ├── utils/
+│   │
+│   ├── routes/
+│   │
 │   ├── App.jsx
-│   ├── index.css
-│   └── main.jsx
+│   ├── main.jsx
+│   └── index.css
+│
+├── .env
 ├── .env.example
-├── .env.local
-├── eslint.config.js
+├── .gitignore
 ├── index.html
 ├── package.json
-├── postcss.config.js
-├── README.md
-├── tailwind.config.js
-└── vite.config.js
+├── package-lock.json
+├── vite.config.js
+└── README.md
 ```
 
-## Setup Instructions
+The exact directory structure may evolve as additional modules are implemented.
 
-### 1. Environment Configuration
+---
 
-Create `.env.local`:
-```env
-# API Configuration
-VITE_API_URL=http://localhost:8080/api
-VITE_WS_URL=ws://localhost:8080
+## 4. Creating the Frontend
 
-# App Configuration
-VITE_APP_NAME=Restaurant POS
-VITE_APP_VERSION=1.0.0
-
-# Feature Flags
-VITE_ENABLE_KITCHEN_DISPLAY=true
-VITE_ENABLE_DELIVERY_TRACKING=true
-VITE_ENABLE_REPORTS=true
-```
-
-### 2. Install Dependencies
+A new React frontend can be created using Vite:
 
 ```bash
+npm create vite@latest frontend
+```
+
+Select:
+
+```text
+Framework: React
+Variant: JavaScript
+```
+
+Then install dependencies:
+
+```bash
+cd frontend
 npm install
-
-# Key dependencies
-npm install axios                      # HTTP client
-npm install zustand                    # State management (alternative to Context)
-npm install react-router-dom           # Routing
-npm install date-fns                   # Date handling
-npm install chart.js react-chartjs-2  # Charts
-npm install react-toastify            # Toast notifications
-npm install framer-motion              # Animations
 ```
 
-### 3. Development Server
+---
+
+## 5. Required Dependencies
+
+Install the main frontend dependencies:
 
 ```bash
-npm run dev
-# Opens http://localhost:5173
+npm install axios react-router-dom react-toastify lucide-react
 ```
 
-### 4. Build for Production
+Install Tailwind CSS according to the version used by the project.
+
+For a Tailwind-based Vite setup, keep the Tailwind configuration consistent with the installed Tailwind version rather than mixing configuration patterns from different major versions.
+
+---
+
+## 6. Environment Configuration
+
+Environment-specific configuration should not be hardcoded throughout the application.
+
+Create:
+
+```text
+.env
+```
+
+Example:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080/api
+```
+
+For real-time endpoints:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080/api
+VITE_SSE_BASE_URL=http://localhost:8080/api
+```
+
+The `.env` file should not contain secrets that can be exposed to the browser.
+
+Vite only exposes variables prefixed with:
+
+```text
+VITE_
+```
+
+to frontend code.
+
+---
+
+## 7. Environment Example File
+
+Create:
+
+```text
+.env.example
+```
+
+Example:
+
+```env
+VITE_API_BASE_URL=http://localhost:8080/api
+VITE_SSE_BASE_URL=http://localhost:8080/api
+```
+
+Developers can copy the example file into their local environment:
 
 ```bash
-npm run build
-npm run preview  # Preview production build
+copy .env.example .env
+```
+
+On Linux/macOS:
+
+```bash
+cp .env.example .env
 ```
 
 ---
 
-## Custom Hooks Reference
+## 8. Axios Configuration
 
-### useAuth - Authentication Management
+All REST API communication should use a centralized Axios client instead of creating separate Axios configurations throughout the application.
+
+Example:
 
 ```javascript
-// hooks/useAuth.js
-import { useContext } from 'react';
-import { AuthContext } from '../context/AuthContext';
+import axios from "axios";
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
-};
+const axiosClient = axios.create({
+    baseURL: import.meta.env.VITE_API_BASE_URL,
+    headers: {
+        "Content-Type": "application/json",
+    },
+});
 
-// Usage in component
-const MyComponent = () => {
-  const { user, login, logout, isAuthenticated } = useAuth();
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/login" />;
-  }
-  
-  return (
-    <div>
-      <p>Welcome, {user.name}</p>
-      <button onClick={logout}>Logout</button>
-    </div>
-  );
-};
+axiosClient.interceptors.request.use(
+    (config) => {
+        const token = localStorage.getItem("accessToken");
+
+        if (token) {
+            config.headers.Authorization = `Bearer ${token}`;
+        }
+
+        return config;
+    },
+    (error) => Promise.reject(error)
+);
+
+export default axiosClient;
 ```
 
-### useApi - API Call Management
+This provides a centralized location for:
+
+* API base URL
+* Authentication headers
+* Request configuration
+* Future token refresh handling
+* Global request behavior
+
+---
+
+## 9. API Communication
+
+Frontend modules should communicate with the backend through the centralized Axios client.
+
+Example:
 
 ```javascript
-// hooks/useApi.js
-import { useState, useCallback } from 'react';
+import axiosClient from "../../services/axiosClient";
 
-export const useApi = (apiFunction) => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-
-  const execute = useCallback(async (...args) => {
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await apiFunction(...args);
-      setData(result);
-      return result;
-    } catch (err) {
-      setError(err.message);
-      throw err;
-    } finally {
-      setLoading(false);
-    }
-  }, [apiFunction]);
-
-  return { data, loading, error, execute };
-};
-
-// Usage
-const OrderList = () => {
-  const { data: orders, loading, execute: fetchOrders } = useApi(orderApi.getOrders);
-  
-  useEffect(() => {
-    fetchOrders(branchId);
-  }, [branchId]);
-  
-  if (loading) return <Loader />;
-  return <div>{orders?.map(order => <OrderCard key={order.id} order={order} />)}</div>;
-};
-```
-
-### useForm - Form Handling
-
-```javascript
-// hooks/useForm.js
-import { useState, useCallback } from 'react';
-
-export const useForm = (initialValues, onSubmit) => {
-  const [values, setValues] = useState(initialValues);
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const handleChange = useCallback((e) => {
-    const { name, value, type, checked } = e.target;
-    setValues(prev => ({
-      ...prev,
-      [name]: type === 'checkbox' ? checked : value
-    }));
-  }, []);
-
-  const handleBlur = useCallback((e) => {
-    const { name } = e.target;
-    setTouched(prev => ({ ...prev, [name]: true }));
-  }, []);
-
-  const handleSubmit = useCallback(async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    try {
-      await onSubmit(values);
-    } catch (err) {
-      setErrors({ form: err.message });
-    } finally {
-      setIsSubmitting(false);
-    }
-  }, [values, onSubmit]);
-
-  return {
-    values,
-    errors,
-    touched,
-    isSubmitting,
-    handleChange,
-    handleBlur,
-    handleSubmit,
-    setValues,
-    setErrors
-  };
-};
-
-// Usage
-const LoginForm = () => {
-  const { values, errors, handleChange, handleSubmit } = useForm(
-    { email: '', password: '' },
-    async (values) => {
-      await authApi.login(values);
-    }
-  );
-
-  return (
-    <form onSubmit={handleSubmit}>
-      <input
-        name="email"
-        value={values.email}
-        onChange={handleChange}
-      />
-      {errors.email && <span>{errors.email}</span>}
-      <button type="submit">Login</button>
-    </form>
-  );
-};
-```
-
-### useKitchenSocket - Real-time Kitchen Updates
-
-```javascript
-// hooks/useKitchenSocket.js
-import { useEffect, useCallback } from 'react';
-import { kitchenSocket } from '../services/websocket/kitchenSocket';
-import { useNotification } from './useNotification';
-
-export const useKitchenSocket = (branchId, userId) => {
-  const { showNotification } = useNotification();
-
-  useEffect(() => {
-    kitchenSocket.connect(branchId, userId);
-
-    kitchenSocket.on('ORDER_ASSIGNED', (message) => {
-      showNotification(`New order: ${message.data.orderNumber}`, 'info');
+export const getOrganizations = async (params) => {
+    const response = await axiosClient.get("/organization/search", {
+        params,
     });
 
-    kitchenSocket.on('ORDER_READY', (message) => {
-      showNotification(`Order ready: ${message.data.orderNumber}`, 'success');
-    });
-
-    return () => kitchenSocket.disconnect();
-  }, [branchId, userId]);
-
-  const updateOrderStatus = useCallback((orderId, status) => {
-    kitchenSocket.updateOrderStatus(orderId, status);
-  }, []);
-
-  return { updateOrderStatus };
-};
-
-// Usage in Kitchen Display
-const KitchenDisplay = () => {
-  const { user } = useAuth();
-  const { updateOrderStatus } = useKitchenSocket(user.branchId, user.id);
-  
-  return (
-    <div className="kitchen-display">
-      {/* Kitchen display UI */}
-    </div>
-  );
+    return response.data;
 };
 ```
+
+Avoid writing:
+
+```javascript
+axios.get("http://localhost:8080/api/organization");
+```
+
+directly inside components.
+
+The API base URL should remain centralized.
 
 ---
 
-## Component Examples
+## 10. Authentication Storage
 
-### Order Management Component
+After successful authentication, the frontend receives authentication information from the backend.
+
+The application may store:
+
+```text
+accessToken
+refreshToken
+user
+permissions
+role
+```
+
+Example:
 
 ```javascript
-// components/Order/OrderForm.jsx
-import { useState } from 'react';
-import { orderApi } from '@/services/api/orderApi';
-import { useForm } from '@/hooks/useForm';
-import { useNotification } from '@/hooks/useNotification';
-
-export const OrderForm = ({ branchId, tableId, onOrderCreated }) => {
-  const { showSuccess, showError } = useNotification();
-  const [items, setItems] = useState([]);
-  
-  const { values, handleChange, handleSubmit } = useForm(
-    { customerName: '', deliveryType: 'DINE_IN' },
-    async (formValues) => {
-      try {
-        const orderData = {
-          ...formValues,
-          branchId,
-          tableId,
-          items
-        };
-        
-        const response = await orderApi.createOrder(orderData);
-        showSuccess('Order created successfully');
-        onOrderCreated(response.data);
-      } catch (error) {
-        showError(error.message);
-      }
-    }
-  );
-
-  const addItem = (menuItem) => {
-    setItems([...items, { ...menuItem, quantity: 1 }]);
-  };
-
-  return (
-    <form onSubmit={handleSubmit} className="order-form">
-      <div className="form-group">
-        <label>Customer Name</label>
-        <input
-          name="customerName"
-          value={values.customerName}
-          onChange={handleChange}
-          required
-        />
-      </div>
-
-      <div className="form-group">
-        <label>Delivery Type</label>
-        <select name="deliveryType" value={values.deliveryType} onChange={handleChange}>
-          <option value="DINE_IN">Dine In</option>
-          <option value="TAKEAWAY">Takeaway</option>
-          <option value="DELIVERY">Delivery</option>
-        </select>
-      </div>
-
-      <div className="items-section">
-        <h3>Order Items</h3>
-        {items.map((item, idx) => (
-          <div key={idx} className="item-row">
-            <span>{item.name}</span>
-            <span>₹{item.price}</span>
-            <input
-              type="number"
-              min="1"
-              value={item.quantity}
-              onChange={(e) => {
-                const newItems = [...items];
-                newItems[idx].quantity = parseInt(e.target.value);
-                setItems(newItems);
-              }}
-            />
-          </div>
-        ))}
-      </div>
-
-      <button type="submit" className="btn btn-primary">
-        Create Order
-      </button>
-    </form>
-  );
-};
-```
-
-### Kitchen Display System Component
-
-```javascript
-// components/Kitchen/KitchenDisplay.jsx
-import { useEffect, useState } from 'react';
-import { kitchenApi } from '@/services/api/kitchenApi';
-import { useKitchenSocket } from '@/hooks/useKitchenSocket';
-import { useAuth } from '@/hooks/useAuth';
-
-export const KitchenDisplay = () => {
-  const { user } = useAuth();
-  const { updateOrderStatus } = useKitchenSocket(user.branchId, user.id);
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    loadKitchenOrders();
-  }, []);
-
-  const loadKitchenOrders = async () => {
-    try {
-      const data = await kitchenApi.getKitchenOrders(user.branchId);
-      setOrders(data);
-    } catch (error) {
-      console.error('Failed to load kitchen orders:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleStatusUpdate = async (orderId, newStatus) => {
-    try {
-      await kitchenApi.updateOrderStatus(orderId, newStatus);
-      updateOrderStatus(orderId, newStatus);
-      setOrders(orders.map(o =>
-        o.id === orderId ? { ...o, status: newStatus } : o
-      ));
-    } catch (error) {
-      console.error('Failed to update order status:', error);
-    }
-  };
-
-  if (loading) return <div className="loader">Loading kitchen orders...</div>;
-
-  return (
-    <div className="kitchen-display grid grid-cols-3 gap-4">
-      {orders.map(order => (
-        <div key={order.id} className={`order-card ${order.status.toLowerCase()}`}>
-          <h3 className="order-number">#{order.orderNumber}</h3>
-          <p className="order-time">{new Date(order.createdAt).toLocaleTimeString()}</p>
-          
-          <div className="items">
-            {order.items.map((item, idx) => (
-              <div key={idx} className="item">
-                <span>{item.quantity}x {item.itemName}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="actions">
-            <button
-              onClick={() => handleStatusUpdate(order.id, 'IN_PROGRESS')}
-              disabled={order.status !== 'PENDING'}
-              className="btn btn-blue"
-            >
-              Start
-            </button>
-            <button
-              onClick={() => handleStatusUpdate(order.id, 'READY')}
-              className="btn btn-green"
-            >
-              Ready
-            </button>
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-};
-```
-
----
-
-## Tailwind CSS Best Practices
-
-### Common Utility Classes
-
-```jsx
-// Spacing
-className="p-4"      // Padding
-className="m-2"      // Margin
-className="gap-4"    // Gap between flex/grid items
-
-// Flexbox
-className="flex flex-col gap-4"      // Column layout
-className="flex justify-between"     // Space between
-className="flex items-center"        // Vertical center
-
-// Grid
-className="grid grid-cols-3 gap-4"   // 3-column grid
-
-// Colors
-className="bg-blue-600"              // Background
-className="text-gray-700"            // Text color
-className="border-2 border-red-500"  // Border
-
-// Responsive
-className="md:grid-cols-2 lg:grid-cols-3"  // Responsive columns
-className="hidden md:flex"                  // Hide on mobile
-
-// States
-className="hover:bg-blue-700"        // Hover state
-className="focus:ring-2"             // Focus state
-className="disabled:opacity-50"      // Disabled state
-```
-
-### Common Component Patterns
-
-```jsx
-// Button
-<button className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
-  Click me
-</button>
-
-// Card
-<div className="bg-white rounded-lg shadow-md p-6">
-  <h3 className="text-xl font-bold mb-2">Title</h3>
-  <p className="text-gray-600">Content</p>
-</div>
-
-// Form Input
-<input
-  className="w-full px-4 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-  type="text"
-  placeholder="Enter text"
-/>
-
-// Modal
-<div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-  <div className="bg-white rounded-lg p-8 max-w-md w-full">
-    <h2 className="text-xl font-bold mb-4">Modal Title</h2>
-    <p className="mb-6">Modal content</p>
-    <button className="bg-blue-600 text-white px-4 py-2 rounded">Close</button>
-  </div>
-</div>
-```
-
----
-
-## Performance Optimization
-
-### Code Splitting
-```javascript
-import { lazy, Suspense } from 'react';
-
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Reports = lazy(() => import('./pages/Reports'));
-
-export const Routes = () => (
-  <Suspense fallback={<Loader />}>
-    <Route path="/dashboard" element={<Dashboard />} />
-    <Route path="/reports" element={<Reports />} />
-  </Suspense>
+localStorage.setItem("accessToken", response.data.data.accessToken);
+localStorage.setItem("refreshToken", response.data.data.refreshToken);
+localStorage.setItem(
+    "user",
+    JSON.stringify(response.data.data)
 );
 ```
 
-### Memoization
+Authentication-related data should only be stored according to the application's security requirements.
+
+Access tokens should never be logged to the browser console.
+
+---
+
+## 11. Authentication Flow
+
+The general authentication flow is:
+
+```text
+Login Page
+     |
+     v
+Authentication API
+     |
+     v
+Spring Security
+     |
+     v
+JWT Access Token
+     |
+     v
+Frontend Storage
+     |
+     v
+Axios Interceptor
+     |
+     v
+Protected API
+```
+
+For authenticated requests:
+
+```text
+Authorization: Bearer <access-token>
+```
+
+is added automatically by the Axios client.
+
+---
+
+## 12. Routing
+
+Application routes should be managed centrally.
+
+Example:
+
 ```javascript
-import { memo, useMemo, useCallback } from 'react';
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 
-// Memoize component
-const OrderCard = memo(({ order, onUpdate }) => (
-  <div>{order.orderNumber}</div>
-));
+function App() {
+    return (
+        <BrowserRouter>
+            <Routes>
+                <Route path="/login" element={<Login />} />
 
-// Memoize expensive computation
-const expensiveData = useMemo(() => {
-  return orders.filter(o => o.status === 'PENDING');
-}, [orders]);
+                <Route
+                    path="/dashboard"
+                    element={<Dashboard />}
+                />
 
-// Memoize callback
-const handleUpdate = useCallback(() => {
-  updateOrder(orderId);
-}, [orderId]);
+                <Route
+                    path="/organizations"
+                    element={<Organizations />}
+                />
+
+                <Route
+                    path="/branches"
+                    element={<Branches />}
+                />
+            </Routes>
+        </BrowserRouter>
+    );
+}
+
+export default App;
+```
+
+Protected routes should be handled through an authentication or permission guard.
+
+---
+
+## 13. Permission-Based UI
+
+The frontend supports permission-based access control.
+
+Example permissions:
+
+```text
+ORGANIZATION_CREATE
+ORGANIZATION_VIEW
+ORGANIZATION_UPDATE
+ORGANIZATION_DELETE
+ORGANIZATION_REACTIVATE
+
+BRANCH_CREATE
+BRANCH_VIEW
+BRANCH_UPDATE
+BRANCH_DELETE
+BRANCH_REACTIVATE
+```
+
+Permissions can be loaded after authentication and stored in the application's authentication state.
+
+UI elements can then be conditionally rendered.
+
+Example:
+
+```javascript
+{hasPermission("ORGANIZATION_CREATE") && (
+    <button>
+        Create Organization
+    </button>
+)}
+```
+
+Frontend permission checks improve the user interface experience, but they must not be treated as the application's security boundary.
+
+The backend must independently enforce authorization.
+
+---
+
+## 14. Layout
+
+The application uses a common dashboard layout containing components such as:
+
+```text
+Dashboard Layout
+│
+├── Sidebar
+├── Header
+├── Main Content
+└── Notifications
+```
+
+The sidebar is responsible for navigation between application modules.
+
+Navigation items can be filtered according to the authenticated user's permissions.
+
+---
+
+## 15. Responsive Design
+
+The frontend is designed for:
+
+* Desktop
+* Laptop
+* Tablet
+* Mobile
+
+Tailwind CSS responsive utilities should be used instead of maintaining separate desktop and mobile applications.
+
+Example:
+
+```jsx
+<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+    ...
+</div>
+```
+
+The interface should remain usable on smaller screens, particularly for restaurant operations such as:
+
+* POS
+* Tables
+* Orders
+* Kitchen
+* Reservations
+* Inventory
+
+---
+
+## 16. Tailwind CSS
+
+Tailwind CSS is used for application styling.
+
+Common utility classes are used directly in React components.
+
+Example:
+
+```jsx
+<button
+    className="
+        px-4
+        py-2
+        rounded-lg
+        font-medium
+        transition
+        hover:opacity-90
+    "
+>
+    Save
+</button>
+```
+
+Reusable UI components should be created when the same visual pattern is used across multiple modules.
+
+---
+
+## 17. Notifications
+
+React Toastify is used for user notifications.
+
+Example:
+
+```javascript
+import { toast } from "react-toastify";
+
+toast.success("Organization created successfully");
+```
+
+Error example:
+
+```javascript
+toast.error("Unable to create organization");
+```
+
+The application should use consistent notification messages throughout the frontend.
+
+---
+
+## 18. Real-Time Updates
+
+The frontend uses Server-Sent Events and WebSocket communication for selected modules.
+
+### SSE
+
+Example endpoint:
+
+```text
+/api/organization/stream
+```
+
+The frontend can establish an SSE connection:
+
+```javascript
+const eventSource = new EventSource(
+    `${import.meta.env.VITE_SSE_BASE_URL}/organization/stream`
+);
+
+eventSource.addEventListener("organization-created", (event) => {
+    const organization = JSON.parse(event.data);
+
+    // Update the UI
+});
+```
+
+The same approach can be used for modules such as:
+
+```text
+Organization
+Branch
+Permission
+Table
 ```
 
 ---
 
-End of Frontend Development Guide
+## 19. WebSocket
+
+WebSocket communication is used where bidirectional real-time communication is required.
+
+SockJS can be used to establish compatibility with the backend WebSocket configuration.
+
+The frontend should keep WebSocket connection logic outside individual UI components whenever possible.
+
+A shared service or hook can manage:
+
+* Connection
+* Subscription
+* Messages
+* Reconnection
+* Cleanup
+
+---
+
+## 20. Component Design
+
+Components should have a single clear responsibility.
+
+For example:
+
+```text
+BranchPage
+│
+├── BranchToolbar
+├── BranchTable
+├── BranchModal
+└── Pagination
+```
+
+The page should coordinate the workflow while reusable components should handle individual UI responsibilities.
+
+Avoid putting large amounts of API, filtering, pagination, and modal logic directly into one component.
+
+---
+
+## 21. Page and Module Pattern
+
+A typical module can follow this structure:
+
+```text
+organization/
+│
+├── OrganizationPage.jsx
+├── OrganizationTable.jsx
+├── OrganizationModal.jsx
+├── organizationService.js
+└── components/
+```
+
+The exact structure can be adjusted as the frontend grows.
+
+The main goal is to keep business modules independent and maintainable.
+
+---
+
+## 22. API Error Handling
+
+API errors should be handled consistently.
+
+Example:
+
+```javascript
+try {
+    const response = await axiosClient.post(
+        "/organization",
+        payload
+    );
+
+    return response.data;
+} catch (error) {
+    const message =
+        error.response?.data?.message ||
+        "Something went wrong";
+
+    toast.error(message);
+
+    throw error;
+}
+```
+
+Common HTTP responses include:
+
+```text
+200 OK
+201 CREATED
+400 BAD REQUEST
+401 UNAUTHORIZED
+403 FORBIDDEN
+404 NOT FOUND
+409 CONFLICT
+500 INTERNAL SERVER ERROR
+```
+
+Authentication-related errors should be handled centrally where possible.
+
+---
+
+## 23. Pagination
+
+Large datasets should use server-side pagination.
+
+Example request:
+
+```text
+GET /organization/search?page=0&size=20
+```
+
+Additional query parameters can be used for:
+
+```text
+search
+sort
+direction
+isActive
+```
+
+Example:
+
+```text
+GET /organization/search?page=0&size=20&sort=createdAt&direction=desc
+```
+
+The frontend pagination component should consume the backend's pagination response rather than loading the complete dataset unnecessarily.
+
+---
+
+## 24. Search and Filtering
+
+List pages should support server-side search and filtering where appropriate.
+
+Example:
+
+```text
+Organization
+├── Name
+├── Email
+├── City
+└── Status
+```
+
+For branches:
+
+```text
+Branch
+├── Branch Name
+├── Branch Code
+├── City
+├── Phone
+├── Organization
+└── Status
+```
+
+Search requests should be debounced where necessary to avoid excessive API requests.
+
+---
+
+## 25. Soft Delete and Restore
+
+The frontend should distinguish between:
+
+```text
+Active
+Inactive
+```
+
+records.
+
+Delete operations should follow the backend's soft-delete behavior where applicable.
+
+Example UI actions:
+
+```text
+Active Record
+    |
+    └── Deactivate
+
+Inactive Record
+    |
+    └── Reactivate
+```
+
+Permanent deletion should only be exposed where the backend explicitly supports it.
+
+---
+
+## 26. Loading States
+
+Every API-driven page should provide an appropriate loading state.
+
+Example:
+
+```jsx
+{loading ? (
+    <LoadingSpinner />
+) : (
+    <OrganizationTable data={organizations} />
+)}
+```
+
+Loading states should be used for:
+
+* Initial page loading
+* Table loading
+* Form submission
+* Search
+* Pagination
+* Delete/restore operations
+
+---
+
+## 27. Form Handling
+
+Forms should maintain clear separation between:
+
+```text
+Form State
+Validation
+API Request
+Response Handling
+UI Feedback
+```
+
+Example:
+
+```text
+OrganizationModal
+        |
+        v
+Validate Form
+        |
+        v
+organizationService
+        |
+        v
+POST /organization
+        |
+        v
+Success / Error
+        |
+        v
+Update UI
+```
+
+---
+
+## 28. Realtime UI Updates
+
+Where SSE or WebSocket events are available, the frontend should update the current data instead of forcing a complete page reload.
+
+For example:
+
+```text
+Create Organization
+        |
+        v
+Backend saves record
+        |
+        v
+SSE Event
+        |
+        v
+Frontend receives event
+        |
+        v
+Organization table updates
+```
+
+The same principle applies to update, delete, restore, and status-change events.
+
+---
+
+## 29. Development Server
+
+Start the frontend with:
+
+```bash
+npm run dev
+```
+
+For LAN development, Vite can be configured to listen on all network interfaces.
+
+Example:
+
+```javascript
+import { defineConfig } from "vite";
+import react from "@vitejs/plugin-react";
+
+export default defineConfig({
+    plugins: [react()],
+    server: {
+        host: true,
+        port: 5173,
+    },
+});
+```
+
+The frontend can then be accessed from another device on the same network using the development machine's local IP address.
+
+---
+
+## 30. Production Build
+
+Create a production build using:
+
+```bash
+npm run build
+```
+
+The generated production files are placed in:
+
+```text
+dist/
+```
+
+Preview the production build locally:
+
+```bash
+npm run preview
+```
+
+The `dist/` directory should not normally be committed to Git.
+
+---
+
+## 31. Git Configuration
+
+The following files and directories should generally be excluded from version control:
+
+```text
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+```
+
+Example `.gitignore`:
+
+```gitignore
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+```
+
+The `.env.example` file should remain committed so that developers know which environment variables are required.
+
+---
+
+## 32. Development Workflow
+
+A typical frontend development workflow is:
+
+```text
+Create / Update Feature
+        |
+        v
+Create Page / Components
+        |
+        v
+Create API Service
+        |
+        v
+Connect Backend API
+        |
+        v
+Handle Loading / Error States
+        |
+        v
+Add Permissions
+        |
+        v
+Add Realtime Updates
+        |
+        v
+Test with Backend
+        |
+        v
+Responsive Testing
+        |
+        v
+Production Build
+```
+
+---
+
+## 33. Module Development Guidelines
+
+When creating a new frontend module, follow this sequence:
+
+### Step 1: Create the Page
+
+```text
+ModulePage.jsx
+```
+
+### Step 2: Create Reusable Components
+
+```text
+ModuleTable.jsx
+ModuleModal.jsx
+ModuleToolbar.jsx
+```
+
+### Step 3: Create the API Service
+
+```text
+moduleService.js
+```
+
+### Step 4: Connect the Backend
+
+Use the centralized Axios client.
+
+### Step 5: Add Authentication
+
+Ensure protected APIs send the JWT access token.
+
+### Step 6: Add Permissions
+
+Control available actions according to the authenticated user's permissions.
+
+### Step 7: Add Pagination and Filtering
+
+Use backend-supported search, filtering, sorting, and pagination.
+
+### Step 8: Add Real-Time Updates
+
+Use SSE or WebSocket where the backend exposes real-time events.
+
+### Step 9: Test
+
+Test:
+
+* Create
+* View
+* Update
+* Delete/deactivate
+* Restore/reactivate
+* Search
+* Filtering
+* Pagination
+* Permissions
+* Responsive layout
+* Real-time updates
+
+---
+
+## 34. Code Organization Principles
+
+Frontend code should follow these principles:
+
+* Keep components focused on UI responsibilities.
+* Keep API communication in service files.
+* Avoid hardcoded backend URLs.
+* Avoid duplicating Axios configuration.
+* Reuse common UI components.
+* Keep authentication logic centralized.
+* Keep permission checks consistent.
+* Avoid unnecessary global state.
+* Clean up SSE and WebSocket connections when components unmount.
+* Do not expose secrets in frontend environment variables.
+* Keep mobile and desktop behavior within the same responsive interface.
+
+---
+
+## 35. Local Development
+
+The complete local development environment consists of:
+
+```text
+Browser
+   |
+   v
+React + Vite
+   |
+   | REST API
+   v
+Spring Boot :8080
+   |
+   v
+MongoDB :27017
+```
+
+For real-time communication:
+
+```text
+Spring Boot
+   |
+   +---- SSE
+   |
+   +---- WebSocket
+   |
+   v
+React Frontend
+```
+
+---
+
+## 36. Frontend Configuration Checklist
+
+Before starting development, verify:
+
+```text
+[ ] Node.js installed
+[ ] npm installed
+[ ] Dependencies installed
+[ ] .env configured
+[ ] Backend running
+[ ] MongoDB running
+[ ] API base URL configured
+[ ] Authentication configured
+[ ] Axios client configured
+[ ] Routing configured
+[ ] Tailwind CSS configured
+[ ] Real-time endpoints configured
+```
+
+---
+
+## 37. Recommended Production Configuration
+
+Production environments should use environment-specific configuration.
+
+Example:
+
+```env
+VITE_API_BASE_URL=https://api.example.com/api
+VITE_SSE_BASE_URL=https://api.example.com/api
+```
+
+Production configuration should also consider:
+
+* HTTPS
+* CORS configuration
+* Secure authentication handling
+* API timeout configuration
+* Error handling
+* Build optimization
+* Asset caching
+* Environment separation
+* Logging
+* Monitoring
+
+No production secrets should be included in the frontend source code.
+
+---
+
+## 38. Summary
+
+The Restaurant Management System frontend is designed as a modular React application communicating with a Spring Boot REST API.
+
+The frontend configuration emphasizes:
+
+* React and Vite
+* Centralized Axios communication
+* JWT-based authentication
+* Permission-aware UI
+* Responsive Tailwind CSS design
+* Server-side pagination and filtering
+* SSE and WebSocket real-time updates
+* Reusable components
+* Modular feature organization
+* Environment-based configuration
+* Production-ready build practices
+
+The frontend should evolve alongside the backend while maintaining clear separation between presentation, API communication, authentication, permissions, and real-time functionality.

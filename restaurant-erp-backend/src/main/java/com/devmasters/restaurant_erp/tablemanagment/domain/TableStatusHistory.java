@@ -1,10 +1,8 @@
 package com.devmasters.restaurant_erp.tablemanagment.domain;
 
+
 import com.devmasters.restaurant_erp.branch.domain.Branch;
 import com.devmasters.restaurant_erp.common.domain.BaseEntity;
-import com.devmasters.restaurant_erp.customer.domain.Customer;
-import com.devmasters.restaurant_erp.floor.domain.Floor;
-import com.devmasters.restaurant_erp.order.domain.Order;
 import com.devmasters.restaurant_erp.common.enums.TableStatus;
 import com.devmasters.restaurant_erp.employee.domain.Employee;
 import com.devmasters.restaurant_erp.organization.domain.Organization;
@@ -20,34 +18,23 @@ import java.time.LocalDateTime;
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document("tables")
-public class RestaurantTable extends BaseEntity {
+@Document("table_status_history")
+public class TableStatusHistory extends BaseEntity {
 
-    private String tableNumber;
+    private TableStatus oldStatus;
+    private TableStatus newStatus;
+    private String reason;
+    private LocalDateTime changedAt;
 
-    private String tableName;
+    @DBRef
+    private RestaurantTable table;
 
-    private Integer capacity;
-
-    private TableStatus status;
-
-    private String qrCode;
-
-    private String notes;
-
-    @Builder.Default
-    private Boolean reservable = true;
-
-    @Builder.Default
-    private Boolean mergedable = false;
+    @DBRef
+    private Employee changedBy;
 
     @DBRef
     private Organization organization;
 
     @DBRef
     private Branch branch;
-
-    @DBRef
-    private Floor floor;
-
 }

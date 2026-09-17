@@ -1,32 +1,32 @@
-package com.devmasters.restaurant_erp.floor.domain;
+package com.devmasters.restaurant_erp.tablemanagment.domain;
 
 import com.devmasters.restaurant_erp.branch.domain.Branch;
 import com.devmasters.restaurant_erp.common.domain.BaseEntity;
-import com.devmasters.restaurant_erp.common.enums.FloorType;
 import com.devmasters.restaurant_erp.organization.domain.Organization;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.EqualsAndHashCode;
-import lombok.NoArgsConstructor;
+import lombok.*;
 import lombok.experimental.SuperBuilder;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
+
+import java.util.List;
 
 @Data
 @EqualsAndHashCode(callSuper = true)
 @SuperBuilder
 @NoArgsConstructor
 @AllArgsConstructor
-@Document("floors")
-public class Floor extends BaseEntity {
+@Document("table_combinations")
+public class TableCombination extends BaseEntity {
 
-    private String floorName;
-
-    private Integer displayOrder;
-
+    private String combinationNumber;
+    private String name;
     private String description;
 
-    private FloorType floorType;
+    @DBRef
+    private List<RestaurantTable> tables;
+
+    private Integer capacity;
+    private Boolean isActive;
 
     @DBRef
     private Organization organization;

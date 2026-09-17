@@ -1,328 +1,1595 @@
-# Restaurant ERP - Authentication System Setup
+# Restaurant ERP — Authentication Setup
 
-## Overview
-Complete authentication system with Spring Boot backend and React frontend, including JWT token-based authentication, CORS configuration, and protected routes.
+## 1. Purpose
 
-## Backend Setup
+The authentication system provides secure identity management for the Restaurant ERP SaaS platform.
 
-### Prerequisites
-- Java 25 or higher
-- Maven 3.6+
-- MongoDB 4.0+ (running locally on port 27017)
+It is responsible for:
 
-### Backend Structure
+- User registration and login
+- BCrypt password hashing
+- JWT access tokens
+- JWT refresh tokens
+- JWT validation
+- Refresh-token lifecycle
+- Logout and token invalidation
+- Role and permission integration
+- Tenant-aware authentication
+- Authentication rate limiting
+- Security auditing
+
+Authentication answers **"Who are you?"**.
+
+Authorization answers **"What are you allowed to do?"**.
+
+Tenant isolation answers **"Which restaurant's data can you access?"**.
+
+---
+
+## 2. High-Level Authentication Architecture
+
+```text
+React Frontend
+      │
+      │ Login / API Request
+      ▼
+AuthController
+      │
+      ▼
+AuthHandler
+      │
+      ▼
+AuthService
+      │
+ ┌────┼──────────────┐
+ ▼    ▼              ▼
+User  BCrypt       JwtService
+Repo  Encoder          │
+ │                     ▼
+ ▼              Access / Refresh
+MongoDB               Tokens
 ```
-restaurant-erp-backend/
-├── src/main/java/com/devmasters/restaurant_erp/
-│   ├── controller/
-│   │   └── AuthController.java          # REST endpoints
-│   ├── service/
-│   │   └── AuthService.java             # Business logic
-│   ├── repository/
-│   │   └── UserRepository.java          # MongoDB access
-│   ├── entity/
-│   │   └── User.java                    # User model
-│   ├── dto/
-│   │   ├── LoginRequest.java
-│   │   ├── SignupRequest.java
-│   │   └── AuthResponse.java
-│   ├── security/
-│   │   └── JwtTokenProvider.java        # JWT token handling
-│   ├── config/
-│   │   └── SecurityConfig.java          # CORS & Security
-│   └── RestaurantErpApplication.java
-├── src/main/resources/
-│   └── application.properties
-└── pom.xml
+
+Protected requests:
+
+```text
+React
+  │
+  │ Authorization: Bearer <access-token>
+  ▼
+JwtAuthFilter
+  │
+  ▼
+JWT Validation
+  │
+  ▼
+SecurityContext
+  │
+  ▼
+Role + Permission Check
+  │
+  ▼
+Tenant Authorization
+  │
+  ▼
+Controller
 ```
 
-### Backend API Endpoints
+---
 
-**POST /api/auth/signup**
-- Register a new restaurant user
-- Request body:
+## 3. Authentication Package Structure
+
+```text
+auth/
+│
+├── controller/
+│   └── AuthController.java
+│
+├── domain/
+│   ├── User.java
+│   └── RefreshToken.java
+│
+├── model/
+│   ├── LoginModel.java
+│   ├── RegisterModel.java
+│   ├── RefreshTokenModel.java
+│   ├── LogoutModel.java
+│   └── AuthResponseModel.java
+│
+├── repository/
+│   ├── UserRepository.java
+│   └── RefreshTokenRepository.java
+│
+├── service/
+│   ├── AuthService.java
+│   ├── JwtService.java
+│   └── RefreshTokenService.java
+│
+├── transformer/
+│   └── AuthTransformer.java
+│
+└── handler/
+    └── AuthHandler.java
+```
+
+Security-specific infrastructure may also live under:
+
+```text
+config/
+├── SecurityConfig.java
+├── JwtConfig.java
+└── JwtAuthFilter.java
+```
+
+---
+
+## 4. User Authentication Entity
+
+The authenticated identity is based on the application `User`.
+
+Conceptually:
+
+```text
+User
+│
+├── id
+├── fullName
+├── email
+├── password
+├── role
+├── tenantId
+├── tokenVersion
+├── isActive
+├── createdAt
+└── updatedAt
+```
+
+The user record establishes:
+
+```text
+Identity
+Tenant
+Role
+Account status
+Token version
+```
+
+Passwords must never be exposed through API models.
+
+---
+
+## 5. Password Security
+
+Passwords are stored using BCrypt.
+
+```text
+Plain Password
+      │
+      ▼
+BCryptPasswordEncoder
+      │
+      ▼
+Password Hash
+      │
+      ▼
+MongoDB
+```
+
+Login verification:
+
+```text
+Entered Password
+      │
+      ▼
+BCrypt.matches(...)
+      │
+      ▼
+Stored Password Hash
+```
+
+Never:
+
+- Store plain-text passwords
+- Return passwords in API responses
+- Log passwords
+- Put passwords inside JWT claims
+
+---
+
+## 6. Registration Flow
+
+```text
+POST /api/auth/register
+          │
+          ▼
+AuthController
+          │
+          ▼
+AuthHandler
+          │
+          ▼
+AuthService
+          │
+          ├── Validate request
+          ├── Check email/account rules
+          ├── Hash password
+          ├── Assign controlled role
+          ├── Establish tenant
+          └── Save User
+                    │
+                    ▼
+                 MongoDB
+```
+
+The client must not be trusted to assign privileged roles such as:
+
+```text
+SUPER_ADMIN
+RESTAURANT_OWNER
+```
+
+Privileged account creation should follow the platform's controlled onboarding process.
+
+---
+
+## 7. Login Flow
+
+Endpoint:
+
+```text
+POST /api/auth/login
+```
+
+Flow:
+
+```text
+Login Request
+     │
+     ▼
+AuthController
+     │
+     ▼
+AuthHandler
+     │
+     ▼
+AuthService
+     │
+     ▼
+Find User
+     │
+     ▼
+Check isActive
+     │
+     ▼
+Verify BCrypt Password
+     │
+     ▼
+Load Role / Permissions
+     │
+     ▼
+Generate Access Token
+     │
+     ▼
+Generate Refresh Token
+     │
+     ▼
+Persist Refresh Token
+     │
+     ▼
+AuthResponseModel
+```
+
+---
+
+## 8. Authentication Response
+
+The current authentication response can contain:
+
+```text
+id
+fullName
+email
+roleId
+role
+referralCode
+accessToken
+refreshToken
+permissions
+```
+
+Example:
+
 ```json
 {
-  "email": "owner@restaurant.com",
-  "firstName": "John",
-  "lastName": "Doe",
-  "restaurantName": "My Restaurant",
-  "phone": "+1234567890",
-  "password": "password123",
-  "confirmPassword": "password123"
-}
-```
-- Response:
-```json
-{
-  "token": "eyJhbGciOiJIUzUxMiJ9...",
-  "email": "owner@restaurant.com",
-  "firstName": "John",
-  "lastName": "Doe",
-  "restaurantName": "My Restaurant",
-  "success": true,
-  "message": "User registered successfully"
+  "id": "...",
+  "fullName": "Restaurant Owner",
+  "email": "owner@example.com",
+  "roleId": "...",
+  "role": "RESTAURANT_OWNER",
+  "referralCode": "...",
+  "accessToken": "...",
+  "refreshToken": "...",
+  "permissions": [
+    "BRANCH_VIEW",
+    "BRANCH_CREATE",
+    "ORDER_VIEW"
+  ]
 }
 ```
 
-**POST /api/auth/login**
-- Authenticate user and get JWT token
-- Request body:
-```json
-{
-  "email": "owner@restaurant.com",
-  "password": "password123"
+---
+
+## 9. JWT Access Token
+
+The access token authenticates normal protected API requests.
+
+Client requests use:
+
+```http
+Authorization: Bearer <access-token>
+```
+
+Useful JWT claims may include:
+
+```text
+sub
+userId
+tenantId
+role
+tokenVersion
+iat
+exp
+```
+
+Never put sensitive information such as passwords into JWT claims.
+
+---
+
+## 10. JWT Refresh Token
+
+Refresh tokens allow the client to obtain a new access token without logging in again.
+
+```text
+Access Token Expired
+        │
+        ▼
+Refresh Token
+        │
+        ▼
+POST /api/auth/refresh
+        │
+        ▼
+Validate Refresh Token
+        │
+        ▼
+Validate User
+        │
+        ▼
+Issue New Access Token
+```
+
+Refresh tokens should have a longer lifetime than access tokens.
+
+---
+
+## 11. Refresh Token Persistence
+
+Refresh tokens are persisted so the server can revoke and validate them.
+
+Conceptually:
+
+```text
+RefreshToken
+│
+├── id
+├── token
+├── userId
+├── expiryDate
+├── revoked
+├── createdAt
+└── ...
+```
+
+Persistence allows the application to:
+
+- Revoke sessions
+- Detect expired tokens
+- Rotate refresh tokens
+- Support logout
+- Clean up expired records
+- Perform security invalidation
+
+---
+
+## 12. Refresh Token Rotation
+
+Recommended lifecycle:
+
+```text
+Old Refresh Token
+       │
+       ▼
+Validate
+       │
+       ▼
+Revoke Old Token
+       │
+       ▼
+Create New Refresh Token
+       │
+       ▼
+Create New Access Token
+```
+
+This limits the useful lifetime of a compromised refresh token.
+
+---
+
+## 13. Token Version
+
+The `User` contains a token-version value.
+
+Example:
+
+```text
+User.tokenVersion = 1
+```
+
+JWT contains:
+
+```text
+tokenVersion = 1
+```
+
+When all existing tokens need to be invalidated:
+
+```text
+User.tokenVersion
+       │
+       ▼
+       2
+```
+
+Old tokens contain:
+
+```text
+tokenVersion = 1
+```
+
+Therefore:
+
+```text
+Old JWT
+   ↓
+Version mismatch
+   ↓
+Rejected
+```
+
+This provides application-level token invalidation.
+
+---
+
+## 14. Logout
+
+Logout should invalidate server-side authentication state.
+
+```text
+POST /api/auth/logout
+          │
+          ▼
+AuthService
+          │
+          ├── Revoke Refresh Token
+          │
+          └── Invalidate token version/session
+                    │
+                    ▼
+                 MongoDB
+```
+
+Frontend local-storage/session cleanup alone is not sufficient to implement server-side logout.
+
+---
+
+## 15. JWT Authentication Filter
+
+`JwtAuthFilter` runs before protected controllers.
+
+```text
+HTTP Request
+     │
+     ▼
+Read Authorization Header
+     │
+     ▼
+Bearer Token?
+  ┌──┴──┐
+ No     Yes
+ │       │
+ ▼       ▼
+Continue Extract JWT
+Request    │
+           ▼
+      Validate Signature
+           │
+           ▼
+      Validate Expiration
+           │
+           ▼
+      Extract User Identity
+           │
+           ▼
+        Load User
+           │
+           ▼
+      Check Account Active
+           │
+           ▼
+      Check Token Version
+           │
+           ▼
+    Create Authentication
+           │
+           ▼
+     SecurityContext
+```
+
+The filter should focus on authentication and must not contain business logic.
+
+---
+
+## 16. SecurityContext
+
+After successful JWT validation:
+
+```text
+JwtAuthFilter
+      │
+      ▼
+Authentication
+      │
+      ▼
+SecurityContextHolder
+```
+
+The authentication context should provide information needed by the application, such as:
+
+```text
+userId
+email
+role
+authorities
+tenantId
+```
+
+---
+
+## 17. Role and Permission Architecture
+
+```text
+User
+ │
+ ▼
+Role
+ │
+ ▼
+RolePermission
+ │
+ ▼
+Permission
+```
+
+Example:
+
+```text
+Restaurant Owner
+      │
+      ▼
+Role
+      │
+      ├── ORGANIZATION_VIEW
+      ├── BRANCH_VIEW
+      ├── BRANCH_CREATE
+      ├── MENU_VIEW
+      ├── ORDER_VIEW
+      └── REPORT_VIEW
+```
+
+Authentication loads the identity.
+
+Authorization uses the role and permissions.
+
+---
+
+## 18. Permission Authorities
+
+During authentication:
+
+```text
+User
+  │
+  ▼
+Role
+  │
+  ▼
+RolePermission
+  │
+  ▼
+Permission
+  │
+  ▼
+Spring Security Authorities
+```
+
+Example authorities:
+
+```text
+BRANCH_VIEW
+BRANCH_CREATE
+BRANCH_UPDATE
+BRANCH_DELETE
+ORDER_VIEW
+```
+
+A protected controller can enforce permissions with Spring Security:
+
+```java
+@PreAuthorize("hasAuthority('BRANCH_CREATE')")
+```
+
+---
+
+## 19. Tenant-Aware Authentication
+
+This is a multi-tenant SaaS application.
+
+Authentication must establish the user's tenant.
+
+```text
+JWT
+ │
+ └── tenantId
+       │
+       ▼
+Authenticated User
+       │
+       ▼
+Tenant Context
+```
+
+Tenant-owned data must always be accessed within the authenticated tenant boundary.
+
+---
+
+## 20. Tenant Security Rule
+
+Never trust a client-provided `tenantId` to determine data ownership.
+
+Bad conceptual flow:
+
+```text
+Request tenantId
+      ↓
+Query database
+```
+
+Correct conceptual flow:
+
+```text
+Authenticated User
+       │
+       ▼
+Authenticated Tenant
+       │
+       ▼
+Tenant-aware Query
+       │
+       ▼
+Requested Resource
+```
+
+Example:
+
+```java
+findByIdAndTenantId(resourceId, tenantId)
+```
+
+or equivalent custom repository logic.
+
+---
+
+## 21. Authentication vs Resource Authorization
+
+Being authenticated does not mean a user can access every resource.
+
+The complete authorization decision is:
+
+```text
+Authenticated User
+       +
+Tenant
+       +
+Role / Permission
+       +
+Resource Ownership
+       =
+Authorized Operation
+```
+
+This is especially important for:
+
+```text
+Organizations
+Branches
+Employees
+Customers
+Menu
+Tables
+Orders
+Inventory
+Purchases
+Expenses
+Reports
+```
+
+---
+
+## 22. User Types
+
+The system supports different account/business identities.
+
+```text
+Super Admin
+Restaurant Owner
+Branch Manager
+Cashier
+Waiter
+Kitchen Staff
+Inventory Manager
+Customer
+```
+
+Employees and customers should remain separate business concepts even though both may authenticate through `User`.
+
+---
+
+## 23. Employee Authentication
+
+```text
+User
+ │
+ ▼
+Employee
+ │
+ ├── Role
+ ├── Branch
+ └── Employment Data
+```
+
+Authentication identity and employee business data should remain separated.
+
+---
+
+## 24. Customer Authentication
+
+```text
+User
+ │
+ ▼
+Customer
+```
+
+Customer accounts must not receive employee or administrative permissions unless the application's business rules explicitly provide them.
+
+---
+
+## 25. Account Status
+
+Authentication must verify:
+
+```text
+User.isActive
+```
+
+Lifecycle:
+
+```text
+Active
+  │
+  ▼
+Deactivated
+  │
+  ▼
+Authentication Rejected
+```
+
+A deactivated user must not continue to authenticate.
+
+---
+
+## 26. Authentication Endpoints
+
+Core endpoints:
+
+```text
+POST /api/auth/register
+POST /api/auth/login
+POST /api/auth/refresh
+POST /api/auth/logout
+GET  /api/auth/me
+```
+
+Possible future endpoints:
+
+```text
+POST /api/auth/change-password
+POST /api/auth/forgot-password
+POST /api/auth/reset-password
+POST /api/auth/verify-email
+POST /api/auth/resend-verification
+```
+
+Only implemented endpoints should be exposed.
+
+---
+
+## 27. Public Endpoints
+
+Authentication endpoints generally require public access:
+
+```text
+/api/auth/login
+/api/auth/register
+/api/auth/refresh
+```
+
+Other endpoints should be public only when explicitly required by the business flow.
+
+Examples may include:
+
+```text
+Subscription plan discovery
+Email verification
+Password reset
+Public customer registration
+```
+
+---
+
+## 28. Security Configuration
+
+`SecurityConfig` is responsible for:
+
+- HTTP security
+- JWT authentication
+- JWT filter registration
+- Public endpoints
+- Protected endpoints
+- Method authorization
+- Session policy
+- Password encoder
+- CORS
+- CSRF strategy where applicable
+
+For a stateless JWT API:
+
+```text
+SessionCreationPolicy.STATELESS
+```
+
+should be used.
+
+---
+
+## 29. Password Encoder Bean
+
+The application should register a password encoder as a Spring bean.
+
+Conceptually:
+
+```java
+@Bean
+PasswordEncoder passwordEncoder() {
+    return new BCryptPasswordEncoder();
 }
 ```
-- Response: Same as signup
 
-**GET /api/auth/test**
-- Test endpoint to verify API is working
+Services should depend on:
 
-### Running the Backend
-
-1. Ensure MongoDB is running:
-```bash
-# On Windows with MongoDB installed
-mongod
-
-# Or using Docker
-docker run -d -p 27017:27017 --name mongodb mongo
+```text
+PasswordEncoder
 ```
 
-2. Navigate to backend directory:
-```bash
-cd restaurant-erp-backend
+rather than repeatedly constructing password encoders.
+
+---
+
+## 30. JWT Configuration
+
+JWT configuration should be externalized.
+
+Example:
+
+```yaml
+jwt:
+  secret: ${JWT_SECRET}
+  access-token-expiration: ${JWT_ACCESS_EXPIRATION}
+  refresh-token-expiration: ${JWT_REFRESH_EXPIRATION}
 ```
 
-3. Build and run:
-```bash
-mvn clean install
-mvn spring-boot:run
+Never commit production secrets into Git.
+
+---
+
+## 31. Secret Management
+
+Secrets must come from environment variables or a secure secret manager.
+
+Examples:
+
+```text
+JWT_SECRET
+MONGODB_URI
+MAIL_PASSWORD
+PAYMENT_SECRET
+OAUTH_CLIENT_SECRET
 ```
 
-The backend will start on `http://localhost:8080`
+Never commit these values directly to the repository.
 
-## Frontend Setup
+---
 
-### Prerequisites
-- Node.js 18+ and npm 9+
+## 32. Refresh Token Cleanup
 
-### Frontend Structure
-```
-restaurant-erp-frontend/
-├── src/
-│   ├── components/
-│   │   └── ProtectedRoute.jsx            # Route protection wrapper
-│   ├── context/
-│   │   └── AuthContext.jsx               # Auth state management
-│   ├── pages/
-│   │   ├── Login.jsx                     # Login page
-│   │   ├── Signup.jsx                    # Sign up page
-│   │   └── Dashboard.jsx                 # Protected dashboard
-│   ├── services/
-│   │   └── authApi.js                    # API calls
-│   ├── styles/
-│   │   ├── Auth.css                      # Auth pages styling
-│   │   └── Dashboard.css                 # Dashboard styling
-│   ├── App.jsx                           # Main app with routing
-│   ├── main.jsx
-│   └── index.css
-├── package.json
-└── vite.config.js
+Expired refresh tokens should be periodically removed or revoked.
+
+```text
+RefreshTokenCleanupScheduler
+           │
+           ▼
+Find Expired Tokens
+           │
+           ▼
+Delete / Revoke
 ```
 
-### Running the Frontend
+This prevents unnecessary growth of the refresh-token collection.
 
-1. Install dependencies:
-```bash
-cd restaurant-erp-frontend
-npm install
+---
+
+## 33. Rate Limiting
+
+Authentication endpoints should be protected against brute-force attacks.
+
+Recommended targets:
+
+```text
+/login
+/register
+/refresh
+/forgot-password
 ```
 
-2. Start development server:
-```bash
-npm run dev
+Flow:
+
+```text
+Client
+  │
+  ▼
+Rate Limiter
+  │
+  ├── Allowed ──► Authentication
+  │
+  └── Limited ─► Reject / Delay
 ```
 
-The frontend will be available at `http://localhost:5173`
+Limits should be configurable.
 
-3. Build for production:
-```bash
-npm run build
+---
+
+## 34. Failed Login Protection
+
+A future implementation may track failed login attempts.
+
+```text
+Login Failure
+      │
+      ▼
+Failure Counter
+      │
+      ▼
+Threshold?
+   ┌──┴──┐
+  No    Yes
+   │      │
+   ▼      ▼
+Continue Temporary
+         Lock / Challenge
 ```
 
-## Features
+Account-locking mechanisms must avoid allowing attackers to trivially lock legitimate users.
 
-### Authentication System
-- **User Registration (Signup)**
-  - Email, name, restaurant name, phone registration
-  - Password confirmation validation
-  - Duplicate email checking
-  - Password encryption using BCrypt
+---
 
-- **User Login**
-  - Email and password authentication
-  - JWT token generation (24-hour expiry)
-  - Token stored in localStorage
+## 35. CORS
 
-- **Protected Routes**
-  - Automatic redirect to login if not authenticated
-  - Route protection with ProtectedRoute component
-  - Session persistence across page refreshes
+Development may allow the configured Vite frontend origin, for example:
 
-### CORS Configuration
-- Allows requests from `http://localhost:5173` and `http://localhost:3000`
-- Supports credentials in requests
-- Allows common HTTP methods (GET, POST, PUT, DELETE)
-
-### Security Features
-- JWT token-based authentication
-- Password encryption with BCrypt
-- Input validation on both frontend and backend
-- CORS protection
-- MongoDB unique index on email
-
-## Authentication Flow
-
-1. **User Registration**
-   - User fills signup form
-   - Frontend validates input locally
-   - POST request to `/api/auth/signup`
-   - Backend validates data, hashes password
-   - JWT token generated
-   - Token and user data stored in localStorage
-   - User redirected to dashboard
-
-2. **User Login**
-   - User enters credentials
-   - POST request to `/api/auth/login`
-   - Backend verifies credentials
-   - JWT token generated
-   - Token and user data stored in localStorage
-   - User redirected to dashboard
-
-3. **Protected Navigation**
-   - Every dashboard access checked via ProtectedRoute
-   - If no token/user, redirect to login
-   - Token persists across browser refreshes
-
-4. **Logout**
-   - Clear localStorage
-   - Clear auth state
-   - Redirect to login page
-
-## Configuration
-
-### Backend (application.properties)
-```properties
-# JWT Settings (in production, use environment variables)
-app.jwtSecret=restaurant-erp-super-secret-key-change-this-in-production-use-environment-variable
-app.jwtExpirationMs=86400000  # 24 hours
-
-# Server
-server.port=8080
-
-# MongoDB
-spring.data.mongodb.host=localhost
-spring.data.mongodb.port=27017
-spring.data.mongodb.database=restaurant_db
+```text
+http://localhost:5173
 ```
 
-### Frontend (API URLs)
-Located in `src/services/authApi.js`:
-```javascript
-const API_BASE_URL = 'http://localhost:8080/api/auth';
+Production should allow only trusted deployed frontend origins.
+
+Avoid unrestricted production CORS unless explicitly required by the security architecture.
+
+---
+
+## 36. CSRF
+
+The CSRF strategy depends on token transport.
+
+For bearer access tokens sent through:
+
+```http
+Authorization: Bearer <token>
 ```
 
-## Testing the System
+the CSRF model differs from cookie-based authentication.
 
-### Using Postman or cURL
+If refresh tokens are stored in cookies, the cookie-based CSRF implications must be handled explicitly.
 
-1. **Test API Connection**
-```bash
-curl http://localhost:8080/api/auth/test
+The frontend and backend must use one consistent token-transport strategy.
+
+---
+
+## 37. Frontend Authentication State
+
+Conceptually:
+
+```text
+Authentication State
+│
+├── user
+├── role
+├── permissions
+├── accessToken
+└── refresh/session state
 ```
 
-2. **Signup**
-```bash
-curl -X POST http://localhost:8080/api/auth/signup \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "test@restaurant.com",
-    "firstName": "Test",
-    "lastName": "User",
-    "restaurantName": "Test Restaurant",
-    "phone": "+1234567890",
-    "password": "Test123!",
-    "confirmPassword": "Test123!"
-  }'
+The frontend uses this state to:
+
+- Show authenticated UI
+- Hide unavailable actions
+- Attach access tokens
+- Refresh authentication
+- Redirect unauthenticated users
+
+Frontend checks are for user experience only.
+
+---
+
+## 38. Axios Authentication Flow
+
+```text
+React
+  │
+  ▼
+Axios Client
+  │
+  ├── Add Authorization Header
+  │
+  ▼
+Spring Boot
 ```
 
-3. **Login**
-```bash
-curl -X POST http://localhost:8080/api/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{
-    "email": "test@restaurant.com",
-    "password": "Test123!"
-  }'
+When an access token expires:
+
+```text
+401
+ │
+ ▼
+Refresh Token
+ │
+ ▼
+New Access Token
+ │
+ ▼
+Retry Original Request
 ```
 
-### Using the Frontend
-1. Navigate to `http://localhost:5173`
-2. Click "Sign up here" on login page
-3. Fill signup form and create account
-4. You'll be redirected to dashboard
-5. Click "Logout" to logout
+If refresh fails:
 
-## Common Issues & Solutions
-
-### Issue: CORS Error
-**Solution**: Ensure backend is running and CORS configuration includes your frontend URL in `SecurityConfig.java`
-
-### Issue: "Invalid email or password" on login
-**Solution**: Verify MongoDB is running and user was created successfully. Check credentials match exactly.
-
-### Issue: Token validation fails
-**Solution**: Ensure `app.jwtSecret` is same in production. Token expires after 24 hours.
-
-### Issue: Cannot connect to MongoDB
-**Solution**: Start MongoDB service:
-```bash
-# Windows
-net start MongoDB
-
-# Mac
-brew services start mongodb-community
-
-# Docker
-docker start mongodb
+```text
+Clear Authentication
+       │
+       ▼
+Redirect to Login
 ```
 
-## Next Steps
+The refresh mechanism must prevent infinite retry loops.
 
-1. **Add Password Reset**: Implement forgot password functionality
-2. **Add Email Verification**: Send confirmation email on signup
-3. **Add 2FA**: Implement two-factor authentication
-4. **Role-Based Access**: Add admin and staff roles
-5. **Token Refresh**: Implement refresh token mechanism
-6. **Profile Management**: Allow users to update their profile
-7. **Audit Logging**: Log all authentication events
+---
 
-## Environment Variables (Production)
+## 39. Current User Endpoint
 
-For production deployment, move sensitive values to environment variables:
+The `/me` endpoint can reconstruct the authenticated user's current state.
 
-**Backend:**
-- `JWT_SECRET` - Replace `app.jwtSecret`
-- `JWT_EXPIRATION_MS` - Replace `app.jwtExpirationMs`
-- `MONGODB_HOST` - MongoDB host
-- `MONGODB_PORT` - MongoDB port
-- `MONGODB_DATABASE` - Database name
+```text
+GET /api/auth/me
+```
 
-**Frontend:**
-- `VITE_API_BASE_URL` - Backend API URL
+Flow:
 
-## License
-MIT
+```text
+JWT
+ │
+ ▼
+Authenticated Identity
+ │
+ ▼
+Load User
+ │
+ ▼
+Return User Model
+```
+
+This is useful after a browser reload.
+
+---
+
+## 40. Authentication Errors
+
+Typical authentication failures include:
+
+```text
+Invalid credentials
+Account inactive
+Invalid access token
+Expired access token
+Invalid refresh token
+Revoked refresh token
+Token version mismatch
+Unauthorized
+Forbidden
+```
+
+Internal stack traces and database details must not be returned to clients.
+
+---
+
+## 41. HTTP 401 vs 403
+
+### 401 Unauthorized
+
+The request is not successfully authenticated.
+
+Examples:
+
+```text
+Missing token
+Invalid token
+Expired token
+Invalid credentials
+```
+
+### 403 Forbidden
+
+The user is authenticated but does not have permission.
+
+Example:
+
+```text
+Cashier
+   │
+   ▼
+POST /api/organization
+   │
+   ▼
+No ORGANIZATION_CREATE
+   │
+   ▼
+403 Forbidden
+```
+
+---
+
+## 42. Password Change
+
+Authenticated password change:
+
+```text
+Authenticated User
+       │
+       ▼
+Verify Current Password
+       │
+       ▼
+Validate New Password
+       │
+       ▼
+Hash New Password
+       │
+       ▼
+Save User
+       │
+       ▼
+Invalidate Existing Tokens
+```
+
+Existing sessions should be invalidated when required by the security policy.
+
+---
+
+## 43. Forgot Password
+
+Future reset flow:
+
+```text
+Email
+  │
+  ▼
+Find Account
+  │
+  ▼
+Generate Short-Lived Reset Token
+  │
+  ▼
+Send Reset Link
+  │
+  ▼
+User Opens Link
+  │
+  ▼
+Validate Token
+  │
+  ▼
+Set New Password
+  │
+  ▼
+Invalidate Existing Tokens
+```
+
+Reset tokens should be:
+
+- Short-lived
+- Single-use
+- Securely generated
+- Invalidated after use
+
+Public responses should avoid revealing whether a particular email exists.
+
+---
+
+## 44. Email Verification
+
+If enabled:
+
+```text
+Registration
+     │
+     ▼
+Verification Token
+     │
+     ▼
+Email
+     │
+     ▼
+User Clicks Link
+     │
+     ▼
+Validate Token
+     │
+     ▼
+Email Verified
+```
+
+Authentication can require verification where business rules demand it.
+
+---
+
+## 45. Authentication Audit Events
+
+Useful audit events include:
+
+```text
+USER_LOGIN_SUCCESS
+USER_LOGIN_FAILED
+USER_LOGOUT
+PASSWORD_CHANGED
+PASSWORD_RESET
+REFRESH_TOKEN_CREATED
+REFRESH_TOKEN_REVOKED
+ACCOUNT_ACTIVATED
+ACCOUNT_DEACTIVATED
+ROLE_CHANGED
+PERMISSIONS_CHANGED
+```
+
+Never log:
+
+```text
+Plain passwords
+Full access tokens
+Full refresh tokens
+JWT secrets
+Database passwords
+```
+
+---
+
+## 46. Authentication Database Collections
+
+Core collections:
+
+```text
+users
+refresh_tokens
+```
+
+Related collections:
+
+```text
+roles
+permissions
+role_permissions
+organizations
+branches
+```
+
+The actual collection names depend on MongoDB mappings.
+
+---
+
+## 47. Authentication Indexes
+
+Likely indexes include:
+
+```text
+users.email
+users.tenantId
+users.tenantId + email
+
+refresh_tokens.token
+refresh_tokens.userId
+refresh_tokens.expiryDate
+```
+
+The final uniqueness strategy must match the application's account model.
+
+---
+
+## 48. Email Uniqueness
+
+The system must define whether email uniqueness is:
+
+```text
+Global:
+email
+```
+
+or:
+
+```text
+Per Tenant:
+tenantId + email
+```
+
+The same rule must be used consistently for:
+
+```text
+Registration
+Login
+Account lookup
+Account management
+Database indexes
+```
+
+---
+
+## 49. Authentication Sequence
+
+```text
+┌────────┐       ┌──────────────┐       ┌────────────┐
+│ Client │       │ Auth Service │       │  MongoDB   │
+└───┬────┘       └──────┬───────┘       └─────┬──────┘
+    │                    │                     │
+    │ Login              │                     │
+    ├───────────────────►│                     │
+    │                    │ Find User           │
+    │                    ├────────────────────►│
+    │                    │◄────────────────────┤
+    │                    │                     │
+    │                    │ Verify BCrypt       │
+    │                    │                     │
+    │                    │ Generate JWT        │
+    │                    │                     │
+    │                    │ Save Refresh Token  │
+    │                    ├────────────────────►│
+    │                    │◄────────────────────┤
+    │                    │                     │
+    │ AuthResponse       │                     │
+    │◄───────────────────┤                     │
+```
+
+---
+
+## 50. Complete Protected Request
+
+```text
+                    React
+                      │
+                      ▼
+              Axios Authentication
+                      │
+                      ▼
+             Authorization Header
+                      │
+                      ▼
+              Spring Security
+                      │
+                      ▼
+               JwtAuthFilter
+                      │
+                      ▼
+               JWT Validation
+                      │
+                      ▼
+               SecurityContext
+                      │
+                      ▼
+              Role + Permission
+                      │
+                      ▼
+               Tenant Context
+                      │
+                      ▼
+              Resource Ownership
+                      │
+                ┌─────┴─────┐
+                │           │
+             Allowed       Denied
+                │           │
+                ▼           ▼
+            Controller     403/401
+                │
+                ▼
+             Handler
+                │
+                ▼
+             Service
+                │
+                ▼
+        Tenant-aware Repository
+                │
+                ▼
+             MongoDB
+```
+
+---
+
+## 51. Authentication Design Rules
+
+1. Never store plain-text passwords.
+2. Never return passwords in API responses.
+3. Never put passwords into JWT claims.
+4. Never trust client-provided roles.
+5. Never trust client-provided tenant ownership.
+6. Always validate JWT signature and expiration.
+7. Validate token version where enabled.
+8. Validate refresh tokens server-side.
+9. Revoke/rotate refresh tokens according to the security strategy.
+10. Check `isActive` before authenticating.
+11. Enforce authorization on the backend.
+12. Apply rate limiting to authentication endpoints.
+13. Keep JWT secrets outside source control.
+14. Never log authentication secrets.
+15. Keep authentication separate from business logic.
+16. Use tenant-aware queries for tenant-owned data.
+17. Invalidate existing sessions after security-sensitive credential changes where required.
+18. Keep public endpoints explicitly configured.
+19. Never expose stack traces through authentication APIs.
+20. Frontend permission checks must never be the security boundary.
+
+---
+
+## 52. Final Authentication Architecture
+
+```text
+                         ┌─────────────────────┐
+                         │      React App      │
+                         └──────────┬──────────┘
+                                    │
+                              Login / API
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │   AuthController    │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │    AuthHandler      │
+                         └──────────┬──────────┘
+                                    │
+                                    ▼
+                         ┌─────────────────────┐
+                         │     AuthService     │
+                         └──────────┬──────────┘
+                                    │
+             ┌──────────────────────┼─────────────────────┐
+             │                      │                     │
+             ▼                      ▼                     ▼
+       UserRepository       PasswordEncoder        JwtService
+             │                                            │
+             ▼                                            ▼
+          MongoDB                                  Access Token
+             │                                    Refresh Token
+             │                                            │
+             └──────────────────┬─────────────────────────┘
+                                ▼
+                       RefreshTokenService
+                                │
+                                ▼
+                             MongoDB
+
+Protected Request
+        │
+        ▼
+   JwtAuthFilter
+        │
+        ▼
+   SecurityContext
+        │
+        ▼
+ Role + Permission
+        │
+        ▼
+ Tenant Authorization
+        │
+        ▼
+ Controller
+        │
+        ▼
+ Handler
+        │
+        ▼
+ Service
+        │
+        ▼
+ Tenant-aware Repository
+        │
+        ▼
+ MongoDB
+```
+
+---
+
+## 53. Core Security Chain
+
+```text
+PASSWORD
+   ↓
+BCrypt HASH
+   ↓
+LOGIN
+   ↓
+JWT ACCESS + REFRESH
+   ↓
+JWT FILTER
+   ↓
+AUTHENTICATION
+   ↓
+ROLE
+   ↓
+PERMISSIONS
+   ↓
+TENANT CONTEXT
+   ↓
+RESOURCE AUTHORIZATION
+   ↓
+BUSINESS OPERATION
+```
+
+The authentication system therefore establishes a secure identity while the authorization and tenant-isolation layers ensure that authenticated users can perform only the operations and access only the data permitted by the application's security model.

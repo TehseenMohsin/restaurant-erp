@@ -1,6 +1,7 @@
 package com.devmasters.restaurant_erp.floor.model;
 
 import com.devmasters.restaurant_erp.branch.model.BranchModel;
+import com.devmasters.restaurant_erp.common.enums.FloorType;
 import com.devmasters.restaurant_erp.organization.model.OrganizationModel;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -35,6 +36,8 @@ public class FloorModel {
 
     @Size(max = 255, message = "Description cannot exceed 255 characters")
     private String description;
+
+    private FloorType floorType;
 
     @Valid
     @NotNull(message = "Organization is required")

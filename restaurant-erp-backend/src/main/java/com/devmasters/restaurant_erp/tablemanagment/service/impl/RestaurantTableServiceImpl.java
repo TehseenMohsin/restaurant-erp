@@ -62,13 +62,9 @@ public class RestaurantTableServiceImpl
         existing.setBranch(entity.getBranch());
         existing.setFloor(entity.getFloor());
         existing.setStatus(entity.getStatus());
-        existing.setCurrentOrder(entity.getCurrentOrder());
-        existing.setCurrentCustomer(entity.getCurrentCustomer());
-        existing.setAssignedWaiter(entity.getAssignedWaiter());
-        existing.setOccupiedAt(entity.getOccupiedAt());
         existing.setQrCode(entity.getQrCode());
         existing.setReservable(entity.getReservable());
-        existing.setMerged(entity.getMerged());
+        existing.setMergedable(entity.getMergedable());
         existing.setNotes(entity.getNotes());
         existing.setIsActive(entity.getIsActive());
 

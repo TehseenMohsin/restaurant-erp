@@ -187,4 +187,8 @@ public class CodeGeneratorService {
     public String generateSplitNumber() {
         return "SPLIT-" + System.currentTimeMillis();
     }
+
+    public String generateCombinationNumber() {
+        return "COMB-" + System.currentTimeMillis();
+    }
 }

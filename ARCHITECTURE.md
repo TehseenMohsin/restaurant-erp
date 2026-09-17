@@ -1,1364 +1,1999 @@
-# Restaurant POS System - Complete Architecture Documentation
+# Restaurant ERP — Architecture
 
-## Table of Contents
-1. [High-Level Architecture](#high-level-architecture)
-2. [Backend Package Structure](#backend-package-structure)
-3. [Frontend Component Structure](#frontend-component-structure)
-4. [API Endpoints](#api-endpoints)
-5. [Data Models](#data-models)
-6. [Authentication & Authorization](#authentication--authorization)
-7. [WebSocket Communications](#websocket-communications)
-8. [Database Schema](#database-schema)
+## 1. Overview
 
----
+**Restaurant ERP** is a multi-tenant SaaS restaurant management, POS, and ERP platform designed for restaurants, cafés, fast-food businesses, and restaurant chains.
 
-## High-Level Architecture
+The system is built around:
 
-### Technology Stack
-- **Backend**: Spring Boot 4.0.6, Java 25, MongoDB
-- **Frontend**: React 18+, Vite, Tailwind CSS
-- **Real-time Communication**: WebSocket (Kitchen Operations)
-- **Authentication**: JWT-based Security
-- **API Documentation**: Swagger/OpenAPI
+- **Backend:** Java + Spring Boot
+- **Database:** MongoDB
+- **Authentication:** JWT access/refresh tokens
+- **Authorization:** RBAC + permissions
+- **Frontend:** React + Vite + Tailwind CSS
+- **Realtime communication:** Server-Sent Events (SSE) and WebSocket
+- **API testing:** Bruno
+- **Build tool:** Maven
+- **Architecture style:** Modular layered architecture
+- **Tenant strategy:** Shared database + shared collections using `tenantId`
 
-### System Components Overview
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                        RESTAURANT POS SYSTEM                     │
-└─────────────────────────────────────────────────────────────────┘
-         │                    │                      │
-    ┌────▼────┐          ┌───▼───┐           ┌─────▼─────┐
-    │ Frontend │          │Backend│           │  Database │
-    │ (React)  │          │(Spring)           │(MongoDB)  │
-    └──────────┘          └───────┘           └───────────┘
-```
+The architecture is intended to support multiple restaurants, branches, employees, customers, menus, orders, inventory, purchasing, reservations, accounting, and reporting from one SaaS platform.
 
 ---
 
-## Backend Package Structure
+# 2. High-Level Architecture
 
-### Root Package: `com.devmasters.restaurant_erp`
-
-```
-com.devmasters.restaurant_erp/
-│
-├── config/                          # Configuration Classes
-│   ├── SecurityConfig               # JWT Security Configuration
-│   ├── MongoConfig                  # MongoDB Configuration
-│   ├── SwaggerConfig                # Swagger/OpenAPI Configuration
-│   ├── WebSocketConfig              # WebSocket Configuration
-│   ├── AuditConfig                  # Audit Logging Configuration
-│   └── MailConfig                   # Email Configuration
-│
-├── common/                          # Shared/Common Components
-│   ├── entity/
-│   │   ├── BaseEntity               # Base entity with audit fields
-│   │   ├── AuditableEntity          # Entity with timestamp tracking
-│   │   └── SoftDeleteEntity         # Soft delete support
-│   │
-│   ├── enums/
-│   │   ├── UserStatus               # ACTIVE, INACTIVE, SUSPENDED
-│   │   ├── UserRole                 # ADMIN, MANAGER, CHEF, WAITER, etc.
-│   │   ├── OrderStatus              # PENDING, PREPARING, READY, SERVED, CANCELLED
-│   │   ├── PaymentStatus            # PENDING, COMPLETED, FAILED, REFUNDED
-│   │   ├── KitchenStatus            # IDLE, BUSY, URGENT
-│   │   ├── TableStatus              # AVAILABLE, OCCUPIED, RESERVED, CLEANING
-│   │   ├── InventoryStatus          # IN_STOCK, LOW_STOCK, OUT_OF_STOCK
-│   │   └── DeliveryStatus           # PENDING, ASSIGNED, PICKED_UP, DELIVERED, FAILED
-│   │
-│   ├── dto/
-│   │   ├── ApiResponse              # Generic API Response wrapper
-│   │   ├── PaginationRequest        # Pagination parameters
-│   │   └── PaginationResponse       # Paginated response wrapper
-│   │
-│   ├── exception/
-│   │   ├── ApplicationException     # Base exception
-│   │   ├── ResourceNotFoundException
-│   │   ├── ValidationException
-│   │   ├── UnauthorizedException
-│   │   └── BusinessLogicException
-│   │
-│   ├── response/
-│   │   ├── ErrorResponse            # Standardized error response
-│   │   └── SuccessResponse          # Standardized success response
-│   │
-│   └── util/
-│       ├── DateTimeUtil             # Date/Time utilities
-│       ├── CurrencyUtil             # Currency formatting
-│       ├── ValidationUtil           # Common validations
-│       └── DateValidator            # Date validation rules
-│
-├── auth/                            # Authentication Module
-│   ├── controller/
-│   │   └── AuthController           # Auth endpoints
-│   │
-│   ├── service/
-│   │   ├── AuthService              # Authentication logic
-│   │   └── JwtService               # JWT token management
-│   │
-│   ├── repository/
-│   │   └── UserRepository           # User data access
-│   │
-│   ├── dto/
-│   │   ├── LoginRequest
-│   │   ├── SignupRequest
-│   │   ├── AuthResponse
-│   │   └── RefreshTokenRequest
-│   │
-│   ├── domain/
-│   │   └── User                     # User entity
-│   │
-│   └── security/
-│       ├── JwtAuthenticationFilter
-│       ├── JwtTokenProvider
-│       └── SecurityContextUtil
-│
-├── organization/                    # Organization Management
-│   ├── entity/
-│   │   └── Organization
-│   │
-│   ├── repository/
-│   │   └── OrganizationRepository
-│   │
-│   ├── service/
-│   │   └── OrganizationService
-│   │
-│   ├── controller/
-│   │   └── OrganizationController
-│   │
-│   ├── dto/
-│   │   ├── OrganizationDTO
-│   │   ├── CreateOrganizationRequest
-│   │   └── UpdateOrganizationRequest
-│   │
-│   └── model/
-│       ├── ContactInfo
-│       └── SubscriptionInfo
-│
-├── branch/                          # Branch Management
-│   ├── entity/
-│   │   └── Branch
-│   │
-│   ├── repository/
-│   │   └── BranchRepository
-│   │
-│   ├── service/
-│   │   └── BranchService
-│   │
-│   ├── controller/
-│   │   └── BranchController
-│   │
-│   ├── dto/
-│   │   ├── BranchDTO
-│   │   ├── CreateBranchRequest
-│   │   └── UpdateBranchRequest
-│   │
-│   └── model/
-│       ├── Location
-│       └── BranchSettings
-│
-├── user/                            # User Management (Employees)
-│   ├── entity/
-│   │   └── User
-│   │
-│   ├── repository/
-│   │   └── UserRepository
-│   │
-│   ├── service/
-│   │   ├── UserService
-│   │   └── UserValidationService
-│   │
-│   ├── controller/
-│   │   └── UserController
-│   │
-│   ├── dto/
-│   │   ├── UserDTO
-│   │   ├── CreateUserRequest
-│   │   ├── UpdateUserRequest
-│   │   └── ChangePasswordRequest
-│   │
-│   └── model/
-│       └── UserProfile
-│
-├── role/                            # Role & Permission Management
-│   ├── entity/
-│   │   ├── Role
-│   │   └── Permission
-│   │
-│   ├── repository/
-│   │   ├── RoleRepository
-│   │   └── PermissionRepository
-│   │
-│   ├── service/
-│   │   ├── RoleService
-│   │   └── PermissionService
-│   │
-│   ├── controller/
-│   │   └── RolePermissionController
-│   │
-│   └── dto/
-│       ├── RoleDTO
-│       ├── PermissionDTO
-│       └── AssignRoleRequest
-│
-├── employee/                        # Employee Management
-│   ├── entity/
-│   │   └── Employee
-│   │
-│   ├── repository/
-│   │   └── EmployeeRepository
-│   │
-│   ├── service/
-│   │   └── EmployeeService
-│   │
-│   ├── controller/
-│   │   └── EmployeeController
-│   │
-│   ├── dto/
-│   │   ├── EmployeeDTO
-│   │   ├── CreateEmployeeRequest
-│   │   └── UpdateEmployeeRequest
-│   │
-│   └── model/
-│       ├── EmployeeDetails
-│       └── EmployeeStats
-│
-├── customer/                        # Customer Management
-│   ├── entity/
-│   │   └── Customer
-│   │
-│   ├── repository/
-│   │   └── CustomerRepository
-│   │
-│   ├── service/
-│   │   └── CustomerService
-│   │
-│   ├── controller/
-│   │   └── CustomerController
-│   │
-│   ├── dto/
-│   │   ├── CustomerDTO
-│   │   ├── CreateCustomerRequest
-│   │   └── UpdateCustomerRequest
-│   │
-│   └── model/
-│       ├── CustomerProfile
-│       └── CustomerStats
-│
-├── menu/                            # Menu Management
-│   ├── entity/
-│   │   ├── Category
-│   │   ├── SubCategory
-│   │   ├── MenuItem
-│   │   ├── Modifier                 # Item add-ons (extra cheese, etc.)
-│   │   └── ComboDeal
-│   │
-│   ├── repository/
-│   │   ├── CategoryRepository
-│   │   ├── SubCategoryRepository
-│   │   ├── MenuItemRepository
-│   │   ├── ModifierRepository
-│   │   └── ComboDealRepository
-│   │
-│   ├── service/
-│   │   ├── MenuService
-│   │   ├── MenuItemService
-│   │   ├── ModifierService
-│   │   └── ComboDealService
-│   │
-│   ├── controller/
-│   │   └── MenuController
-│   │
-│   └── dto/
-│       ├── CategoryDTO
-│       ├── MenuItemDTO
-│       ├── ModifierDTO
-│       └── ComboDealDTO
-│
-├── inventory/                       # Inventory Management
-│   ├── entity/
-│   │   ├── Inventory
-│   │   ├── StockMovement           # Tracks all stock changes
-│   │   ├── StockAdjustment         # Manual adjustments
-│   │   └── InventoryAlert          # Low stock alerts
-│   │
-│   ├── repository/
-│   │   ├── InventoryRepository
-│   │   ├── StockMovementRepository
-│   │   ├── StockAdjustmentRepository
-│   │   └── InventoryAlertRepository
-│   │
-│   ├── service/
-│   │   ├── InventoryService
-│   │   ├── StockMovementService
-│   │   └── LowStockAlertService
-│   │
-│   ├── controller/
-│   │   └── InventoryController
-│   │
-│   └── dto/
-│       ├── InventoryDTO
-│       ├── StockMovementDTO
-│       └── AdjustStockRequest
-│
-├── supplier/                        # Supplier Management
-│   ├── entity/
-│   │   └── Supplier
-│   │
-│   ├── repository/
-│   │   └── SupplierRepository
-│   │
-│   ├── service/
-│   │   └── SupplierService
-│   │
-│   ├── controller/
-│   │   └── SupplierController
-│   │
-│   ├── dto/
-│   │   ├── SupplierDTO
-│   │   ├── CreateSupplierRequest
-│   │   └── UpdateSupplierRequest
-│   │
-│   └── model/
-│       └── SupplierPaymentTerms
-│
-├── purchase/                        # Purchase Management
-│   ├── entity/
-│   │   ├── Purchase
-│   │   └── PurchaseItem
-│   │
-│   ├── repository/
-│   │   ├── PurchaseRepository
-│   │   └── PurchaseItemRepository
-│   │
-│   ├── service/
-│   │   ├── PurchaseService
-│   │   └── PurchaseValidationService
-│   │
-│   ├── controller/
-│   │   └── PurchaseController
-│   │
-│   └── dto/
-│       ├── PurchaseDTO
-│       ├── CreatePurchaseRequest
-│       ├── UpdatePurchaseRequest
-│       └── PurchaseItemDTO
-│
-├── tablemanagement/                 # Table Management
-│   ├── entity/
-│   │   ├── Floor
-│   │   ├── RestaurantTable         # Individual tables
-│   │   └── Reservation             # Table reservations
-│   │
-│   ├── repository/
-│   │   ├── FloorRepository
-│   │   ├── RestaurantTableRepository
-│   │   └── ReservationRepository
-│   │
-│   ├── service/
-│   │   ├── TableService
-│   │   ├── ReservationService
-│   │   └── TableAvailabilityService
-│   │
-│   ├── controller/
-│   │   └── TableManagementController
-│   │
-│   ├── dto/
-│   │   ├── FloorDTO
-│   │   ├── TableDTO
-│   │   ├── ReservationDTO
-│   │   └── UpdateTableStatusRequest
-│   │
-│   └── model/
-│       └── TableLayout
-│
-├── order/                           # Order Management
-│   ├── entity/
-│   │   ├── Order
-│   │   ├── OrderItem              # Items in the order
-│   │   ├── OrderDiscount          # Discounts applied
-│   │   ├── OrderTax               # Tax calculations
-│   │   └── OrderHistory           # Order state changes
-│   │
-│   ├── repository/
-│   │   ├── OrderRepository
-│   │   ├── OrderItemRepository
-│   │   ├── OrderDiscountRepository
-│   │   └── OrderTaxRepository
-│   │
-│   ├── service/
-│   │   ├── OrderService           # Main order operations
-│   │   ├── BillingService         # Billing calculations
-│   │   ├── DiscountService        # Discount calculations
-│   │   ├── OrderValidationService
-│   │   └── OrderNotificationService
-│   │
-│   ├── controller/
-│   │   ├── OrderController
-│   │   ├── BillingController
-│   │   └── DiscountController
-│   │
-│   ├── dto/
-│   │   ├── OrderDTO
-│   │   ├── CreateOrderRequest
-│   │   ├── OrderItemDTO
-│   │   ├── BillingDTO
-│   │   └── ApplyDiscountRequest
-│   │
-│   └── model/
-│       ├── OrderSummary
-│       ├── BillingDetails
-│       └── DiscountDetails
-│
-├── kitchen/                         # Kitchen Operations (Real-time)
-│   ├── entity/
-│   │   ├── KitchenOrder           # Orders in kitchen
-│   │   ├── KitchenStation         # Kitchen workstations
-│   │   └── ChefPerformance        # Chef metrics
-│   │
-│   ├── repository/
-│   │   ├── KitchenOrderRepository
-│   │   ├── KitchenStationRepository
-│   │   └── ChefPerformanceRepository
-│   │
-│   ├── service/
-│   │   ├── KitchenService         # Order preparation management
-│   │   ├── KitchenAssignmentService
-│   │   ├── KitchenMetricsService
-│   │   └── KitchenNotificationService
-│   │
-│   ├── websocket/
-│   │   ├── KitchenSocketPublisher # Broadcasts to kitchen clients
-│   │   ├── KitchenSocketListener  # Handles kitchen updates
-│   │   ├── KitchenSocketController# WebSocket endpoints
-│   │   └── KitchenMessageHandler
-│   │
-│   ├── controller/
-│   │   └── KitchenController
-│   │
-│   └── dto/
-│       ├── KitchenOrderDTO
-│       ├── KitchenStationDTO
-│       ├── UpdateKitchenStatusRequest
-│       └── ChefPerformanceDTO
-│
-├── delivery/                        # Delivery Management
-│   ├── entity/
-│   │   ├── Delivery
-│   │   ├── DeliveryAssignment
-│   │   └── DeliveryTracking       # Real-time location tracking
-│   │
-│   ├── repository/
-│   │   ├── DeliveryRepository
-│   │   ├── DeliveryAssignmentRepository
-│   │   └── DeliveryTrackingRepository
-│   │
-│   ├── service/
-│   │   ├── DeliveryService
-│   │   ├── DeliveryAssignmentService
-│   │   └── DeliveryTrackingService
-│   │
-│   ├── controller/
-│   │   └── DeliveryController
-│   │
-│   └── dto/
-│       ├── DeliveryDTO
-│       ├── AssignDeliveryRequest
-│       ├── UpdateDeliveryStatusRequest
-│       └── DeliveryTrackingDTO
-│
-├── attendance/                      # Employee Attendance
-│   ├── entity/
-│   │   └── Attendance
-│   │
-│   ├── repository/
-│   │   └── AttendanceRepository
-│   │
-│   ├── service/
-│   │   ├── AttendanceService
-│   │   └── BiometricService        # Fingerprint/Face recognition
-│   │
-│   ├── controller/
-│   │   └── AttendanceController
-│   │
-│   └── dto/
-│       ├── AttendanceDTO
-│       ├── CheckInRequest
-│       └── AttendanceReportDTO
-│
-├── payroll/                         # Payroll Management
-│   ├── entity/
-│   │   ├── Salary
-│   │   ├── SalarySlip
-│   │   └── Deduction
-│   │
-│   ├── repository/
-│   │   ├── SalaryRepository
-│   │   ├── SalarySlipRepository
-│   │   └── DeductionRepository
-│   │
-│   ├── service/
-│   │   ├── PayrollService
-│   │   ├── SalaryCalculationService
-│   │   └── SalarySlipGenerator
-│   │
-│   ├── controller/
-│   │   └── PayrollController
-│   │
-│   └── dto/
-│       ├── SalaryDTO
-│       ├── SalarySlipDTO
-│       └── PayrollReportDTO
-│
-├── loyalty/                         # Loyalty Program
-│   ├── entity/
-│   │   ├── LoyaltyAccount         # Customer loyalty points
-│   │   └── LoyaltyTransaction     # Points earned/redeemed
-│   │
-│   ├── repository/
-│   │   ├── LoyaltyAccountRepository
-│   │   └── LoyaltyTransactionRepository
-│   │
-│   ├── service/
-│   │   ├── LoyaltyService
-│   │   └── LoyaltyPointsCalculator
-│   │
-│   ├── controller/
-│   │   └── LoyaltyController
-│   │
-│   └── dto/
-│       ├── LoyaltyAccountDTO
-│       ├── RedeemPointsRequest
-│       └── LoyaltyTransactionDTO
-│
-├── payment/                         # Payment Processing
-│   ├── entity/
-│   │   ├── Payment
-│   │   ├── Refund
-│   │   └── CashDrawer             # Cash management
-│   │
-│   ├── repository/
-│   │   ├── PaymentRepository
-│   │   ├── RefundRepository
-│   │   └── CashDrawerRepository
-│   │
-│   ├── service/
-│   │   ├── PaymentService         # Payment processing
-│   │   ├── RefundService
-│   │   ├── PaymentGatewayService
-│   │   └── CashDrawerService      # Cash reconciliation
-│   │
-│   ├── gateway/
-│   │   ├── StripePaymentGateway
-│   │   ├── RazorpayPaymentGateway
-│   │   └── PayPalPaymentGateway
-│   │
-│   ├── controller/
-│   │   ├── PaymentController
-│   │   └── CashDrawerController
-│   │
-│   └── dto/
-│       ├── PaymentDTO
-│       ├── ProcessPaymentRequest
-│       ├── RefundDTO
-│       └── CashDrawerDTO
-│
-├── notifications/                   # Multi-channel Notifications
-│   ├── email/
-│   │   ├── EmailService
-│   │   └── EmailTemplate
-│   │
-│   ├── sms/
-│   │   ├── SmsService
-│   │   └── SmsTemplate
-│   │
-│   ├── whatsapp/
-│   │   ├── WhatsAppService
-│   │   └── WhatsAppTemplate
-│   │
-│   ├── push/
-│   │   ├── PushNotificationService
-│   │   └── PushTemplate
-│   │
-│   ├── entity/
-│   │   └── Notification
-│   │
-│   ├── repository/
-│   │   └── NotificationRepository
-│   │
-│   ├── service/
-│   │   └── NotificationOrchestrator
-│   │
-│   ├── controller/
-│   │   └── NotificationController
-│   │
-│   └── dto/
-│       ├── NotificationDTO
-│       └── SendNotificationRequest
-│
-├── reports/                         # Business Reports & Analytics
-│   ├── controller/
-│   │   ├── SalesReportController
-│   │   ├── InventoryReportController
-│   │   └── StaffReportController
-│   │
-│   ├── service/
-│   │   ├── SalesAnalyticsService
-│   │   ├── InventoryAnalyticsService
-│   │   └── StaffAnalyticsService
-│   │
-│   ├── dto/
-│   │   ├── SalesReportDTO
-│   │   ├── InventoryReportDTO
-│   │   ├── StaffReportDTO
-│   │   └── DateRangeRequest
-│   │
-│   └── model/
-│       ├── DailyRevenue
-│       ├── ItemPopularity
-│       ├── StaffPerformance
-│       └── InventorySummary
-│
-├── audit/                           # Audit Logging
-│   ├── entity/
-│   │   └── AuditLog
-│   │
-│   ├── repository/
-│   │   └── AuditLogRepository
-│   │
-│   └── service/
-│       ├── AuditService
-│       └── AuditLogger
-│
-└── security/                        # Additional Security
-    ├── filter/
-    │   └── JwtAuthenticationFilter
-    ├── handler/
-    │   ├── JwtExceptionHandler
-    │   └── GlobalExceptionHandler
-    ├── provider/
-    │   ├── JwtTokenProvider
-    │   └── OAuth2Provider
-    └── util/
-        ├── SecurityContextUtil
-        └── PasswordEncoder
+```text
+                         ┌─────────────────────────┐
+                         │        React App        │
+                         │   Vite + Tailwind CSS   │
+                         └────────────┬────────────┘
+                                      │
+                         HTTP / REST / SSE / WS
+                                      │
+                                      ▼
+                         ┌─────────────────────────┐
+                         │      Spring Boot API    │
+                         │                         │
+                         │ Controllers             │
+                         │ Handlers                 │
+                         │ Services                 │
+                         │ Transformers             │
+                         │ Repositories             │
+                         └────────────┬────────────┘
+                                      │
+                       ┌──────────────┴──────────────┐
+                       │                             │
+                       ▼                             ▼
+              ┌────────────────┐            ┌────────────────┐
+              │ Spring Security│            │ Realtime Layer │
+              │ JWT + RBAC     │            │ SSE / WebSocket│
+              └────────────────┘            └────────────────┘
+                       │
+                       ▼
+              ┌─────────────────────┐
+              │      MongoDB        │
+              │ Shared DB / Shared  │
+              │ Collections         │
+              │ tenantId isolation  │
+              └─────────────────────┘
 ```
 
 ---
 
-## Frontend Component Structure
+# 3. Backend Package Architecture
 
+The backend follows a **module-first architecture**.
+
+```text
+com.devmasters.restaurant_erp
+│
+├── auth/
+├── organization/
+├── branch/
+│
+├── user/
+├── employee/
+├── customer/
+├── vendor/
+│
+├── role/
+├── permission/
+├── rolepermission/
+│
+├── subscription/
+│
+├── menu/
+├── recipe/
+├── inventory/
+├── purchase/
+│
+├── floor/
+├── table/
+├── reservation/
+│
+├── order/
+├── kitchen/
+├── delivery/
+│
+├── tax/
+├── expense/
+├── accounting/
+│
+├── attendance/
+├── payroll/
+│
+├── loyalty/
+├── notification/
+├── audit/
+├── report/
+│
+├── payment/
+├── settings/
+│
+└── common/
 ```
-restaurant-erp-frontend/src/
+
+Each business module should remain as independent as reasonably possible.
+
+---
+
+# 4. Module Internal Structure
+
+The standard structure for a module is:
+
+```text
+module/
+│
+├── controller/
+│   └── ModuleController.java
+│
+├── domain/
+│   └── Module.java
+│
+├── model/
+│   └── ModuleModel.java
+│
+├── repository/
+│   ├── ModuleRepository.java
+│   └── custom/
+│       ├── ModuleCustomRepository.java
+│       └── ModuleCustomRepositoryImpl.java
+│
+├── service/
+│   └── ModuleService.java
+│
+├── handler/
+│   └── ModuleHandler.java
+│
+└── transformer/
+    └── ModuleTransformer.java
+```
+
+Not every module requires every package, but the project follows this structure when CRUD/search/business logic requires it.
+
+---
+
+# 5. Responsibility of Each Layer
+
+## 5.1 Domain
+
+The `domain` package contains MongoDB persistence entities.
+
+Example:
+
+```text
+domain/
+└── Organization.java
+```
+
+Responsibilities:
+
+- Database representation
+- Persistent fields
+- MongoDB annotations
+- Relationships/references
+- Extending common base entities where applicable
+
+The domain entity should not contain controller/API concerns.
+
+---
+
+## 5.2 Model
+
+The `model` package contains API/application models.
+
+Example:
+
+```text
+model/
+└── OrganizationModel.java
+```
+
+Models are used instead of exposing MongoDB domain entities directly through the API.
+
+Responsibilities:
+
+- API data representation
+- Request/response data where appropriate
+- Nested model representation
+- Hiding persistence implementation details
+
+The project prefers a unified model approach rather than creating unnecessary `Request` and `Response` classes for every operation.
+
+---
+
+## 5.3 Transformer
+
+The transformer converts between domain entities and API models.
+
+Standard methods:
+
+```java
+toModel(...)
+toEntity(...)
+toModels(...)
+toEntities(...)
+```
+
+Flow:
+
+```text
+Domain Entity <──── Transformer ────> API Model
+```
+
+Example:
+
+```text
+Organization
+      │
+      ▼
+OrganizationTransformer
+      │
+      ▼
+OrganizationModel
+```
+
+Transformers should not contain business rules.
+
+---
+
+## 5.4 Repository
+
+Repositories are responsible for database access.
+
+Example:
+
+```text
+OrganizationRepository
+```
+
+Typical responsibilities:
+
+- CRUD operations
+- Simple derived queries
+- Pagination
+- Database persistence
+
+Complex MongoDB queries should use the custom repository layer.
+
+---
+
+## 5.5 Custom Repository
+
+The custom repository layer is used for complex searches and dynamic queries.
+
+```text
+ModuleCustomRepository
+        │
+        ▼
+ModuleCustomRepositoryImpl
+        │
+        ▼
+MongoTemplate
+```
+
+Typical use cases:
+
+- Multiple optional filters
+- Search criteria
+- Sorting
+- Pagination
+- Dynamic MongoDB queries
+- Aggregation queries
+
+---
+
+# 6. Service Layer
+
+The service layer contains business logic.
+
+```text
+Controller
+    ↓
+Handler
+    ↓
+Service
+    ↓
+Repository
+```
+
+Responsibilities include:
+
+- Business rules
+- Validation that belongs to business logic
+- Create/update/delete operations
+- Transaction-like workflows where applicable
+- Permission/business checks
+- Coordinating multiple repositories/services
+- Publishing realtime events when required
+
+Services should not depend on HTTP-specific concerns.
+
+---
+
+# 7. Handler Layer
+
+Handlers sit between controllers and services.
+
+```text
+Controller
+    ↓
+Handler
+    ↓
+Service
+```
+
+The handler is responsible for application/API orchestration such as:
+
+- Calling the correct service method
+- Preparing API responses
+- Coordinating model transformation
+- Handling operation-specific flow
+- Keeping controllers thin
+
+The controller should primarily define the HTTP endpoint.
+
+---
+
+# 8. Controller Layer
+
+Controllers expose REST APIs.
+
+Example:
+
+```text
+/api/organization
+/api/branch
+/api/subscription-plan
+/api/role-permission
+```
+
+Responsibilities:
+
+- HTTP endpoints
+- Path/query parameters
+- Request models
+- Authentication/authorization annotations
+- Calling handlers
+- Returning API responses
+
+Controllers should not contain database queries or large business rules.
+
+---
+
+# 9. Standard Request Flow
+
+A normal CRUD request follows:
+
+```text
+React
+  │
+  │ HTTP
+  ▼
+Controller
+  │
+  ▼
+Handler
+  │
+  ▼
+Service
+  │
+  ▼
+Repository / Custom Repository
+  │
+  ▼
+MongoDB
+```
+
+For a response:
+
+```text
+MongoDB
+   │
+   ▼
+Repository
+   │
+   ▼
+Service
+   │
+   ▼
+Handler
+   │
+   ▼
+Transformer
+   │
+   ▼
+Model
+   │
+   ▼
+Controller
+   │
+   ▼
+React
+```
+
+---
+
+# 10. Multi-Tenant Architecture
+
+The application uses:
+
+```text
+Shared Database
+        +
+Shared Collections
+        +
+tenantId
+```
+
+Example:
+
+```text
+restaurant_db
+│
+├── organizations
+├── branches
+├── users
+├── employees
+├── menu_items
+├── orders
+├── inventory
+└── ...
+```
+
+Each tenant-owned document contains a tenant identifier.
+
+Conceptually:
+
+```json
+{
+  "id": "...",
+  "tenantId": "...",
+  "name": "...",
+  "isActive": true
+}
+```
+
+Tenant isolation must be enforced in application/database queries.
+
+A request must never be allowed to read or modify another tenant's data.
+
+---
+
+# 11. Organization and Branch Hierarchy
+
+The restaurant structure is:
+
+```text
+Super Admin
+    │
+    ▼
+Restaurant Owner
+    │
+    ▼
+Organization / Restaurant
+    │
+    ├── Branch
+    │    ├── Floor
+    │    │    └── Table
+    │    ├── Employees
+    │    ├── Orders
+    │    └── Inventory
+    │
+    └── Subscription
+```
+
+An organization represents the restaurant/business account.
+
+A branch represents an individual physical location.
+
+---
+
+# 12. Authentication Architecture
+
+Authentication uses:
+
+```text
+JWT Access Token
++
+JWT Refresh Token
++
+Token Version
++
+BCrypt Password Hashing
+```
+
+Authentication flow:
+
+```text
+Login
+  │
+  ▼
+Credentials Validation
+  │
+  ▼
+User Authentication
+  │
+  ▼
+JWT Access Token
++
+Refresh Token
+  │
+  ▼
+Client
+```
+
+For protected requests:
+
+```text
+HTTP Request
+     │
+     ▼
+JwtAuthFilter
+     │
+     ▼
+Extract JWT
+     │
+     ▼
+Validate Token
+     │
+     ▼
+Load Authentication
+     │
+     ▼
+Spring Security
+     │
+     ▼
+Controller
+```
+
+---
+
+# 13. Authorization Architecture
+
+Authorization uses:
+
+```text
+User
+  │
+  ▼
+Role
+  │
+  ▼
+Permissions
+```
+
+Example:
+
+```text
+Restaurant Owner
+       │
+       ▼
+      Role
+       │
+       ├── ORGANIZATION_CREATE
+       ├── ORGANIZATION_VIEW
+       ├── BRANCH_CREATE
+       ├── BRANCH_VIEW
+       ├── ORDER_VIEW
+       └── REPORT_VIEW
+```
+
+Permissions are represented using permission identifiers such as:
+
+```text
+MODULE_ACTION
+```
+
+Examples:
+
+```text
+ORGANIZATION_CREATE
+ORGANIZATION_VIEW
+ORGANIZATION_UPDATE
+ORGANIZATION_DELETE
+
+BRANCH_CREATE
+BRANCH_VIEW
+BRANCH_UPDATE
+BRANCH_DELETE
+```
+
+Spring Security method authorization can be applied using `@PreAuthorize`.
+
+---
+
+# 14. Roles
+
+The planned role hierarchy includes:
+
+```text
+Super Admin
+Restaurant Owner
+Branch Manager
+Cashier
+Waiter
+Kitchen Staff
+Inventory Manager
+Customer
+```
+
+Roles determine which permissions a user receives.
+
+The system should avoid hardcoding business permissions throughout controllers and services.
+
+---
+
+# 15. Common Base Entity
+
+Most persistent entities use a common base entity.
+
+Conceptually:
+
+```text
+BaseEntity
+│
+├── UUID id
+├── boolean isActive
+├── createdAt
+└── updatedAt
+```
+
+This provides:
+
+- Consistent IDs
+- Soft deletion
+- Creation timestamps
+- Update timestamps
+
+---
+
+# 16. Soft Delete Architecture
+
+The project uses soft deletion rather than immediately removing business records.
+
+```text
+isActive = true
+```
+
+means active.
+
+```text
+isActive = false
+```
+
+means deactivated/deleted.
+
+Typical lifecycle:
+
+```text
+Create
+  ↓
+Active
+  ↓
+Deactivate
+  ↓
+Inactive
+  ↓
+Reactivate
+```
+
+This is especially important for business records where historical information must be retained.
+
+---
+
+# 17. Realtime Architecture
+
+The application uses both **SSE** and **WebSocket** depending on the feature.
+
+## SSE
+
+Server-Sent Events are appropriate for server-to-client updates such as:
+
+```text
+Organization created
+Organization updated
+Organization deleted
+Branch created
+Branch updated
+Permission changed
+Table status changed
+```
+
+Conceptual flow:
+
+```text
+MongoDB
+   ↓
+Service
+   ↓
+SSE Event Service
+   ↓
+SseEmitter
+   ↓
+React
+   ↓
+UI Update
+```
+
+The frontend should update the affected data without requiring a full page reload.
+
+## WebSocket
+
+WebSocket is suitable for realtime interactive workflows such as:
+
+```text
+Kitchen updates
+Order status
+POS events
+Notifications
+Live operational state
+```
+
+---
+
+# 18. Menu Architecture
+
+The menu domain is structured around:
+
+```text
+Category
+   │
+   ▼
+MenuItem
+   │
+   ├── MenuVariant
+   ├── ModifierGroup
+   │       └── Modifier
+   │
+   └── MenuItemModifierGroup
+```
+
+This allows restaurants to support:
+
+- Categories
+- Menu items
+- Variants/sizes
+- Add-ons
+- Modifier groups
+- Optional modifiers
+
+---
+
+# 19. Floor and Table Architecture
+
+The physical restaurant structure is:
+
+```text
+Organization
+    │
+    ▼
+Branch
+    │
+    ▼
+Floor
+    │
+    ▼
+RestaurantTable
+```
+
+Tables can have operational states such as:
+
+```text
+AVAILABLE
+OCCUPIED
+RESERVED
+CLEANING
+OUT_OF_SERVICE
+```
+
+Table-related functionality includes:
+
+```text
+Table
+TableStatusHistory
+TableCombination
+```
+
+Table assignment is closely related to reservation workflows and should be handled as part of the reservation/table-assignment process rather than duplicating reservation logic inside the basic table module.
+
+---
+
+# 20. Order Architecture
+
+The order module is one of the central business modules.
+
+Conceptually:
+
+```text
+Order
+│
+├── OrderItem
+│     └── OrderItemModifier
+│
+├── OrderPayment
+├── OrderDiscount
+├── OrderTax
+├── OrderStatusHistory
+├── OrderDelivery
+├── OrderKitchenTicket
+├── OrderAttachment
+├── OrderRefund
+└── OrderSplit
+      └── OrderSplitItem
+```
+
+Order lifecycle:
+
+```text
+Created
+   ↓
+Confirmed
+   ↓
+Preparing
+   ↓
+Ready
+   ↓
+Completed
+```
+
+Other states may exist depending on order type and operational requirements.
+
+---
+
+# 21. Kitchen Architecture
+
+Kitchen functionality is connected to orders but should remain a separate module for operational workflows.
+
+```text
+Order
+  │
+  ▼
+Kitchen Ticket
+  │
+  ▼
+Kitchen Station
+  │
+  ▼
+Preparation
+  │
+  ▼
+Ready
+```
+
+Realtime updates are particularly important in kitchen workflows.
+
+---
+
+# 22. Inventory Architecture
+
+Inventory should connect:
+
+```text
+Vendor
+   │
+   ▼
+Purchase
+   │
+   ▼
+Inventory
+   │
+   ├── Stock
+   ├── Stock Movement
+   └── Adjustments
+          │
+          ▼
+       Reports
+```
+
+Inventory should also integrate with recipes.
+
+---
+
+# 23. Recipe Architecture
+
+Recipes connect menu items to inventory ingredients.
+
+```text
+MenuItem
+   │
+   ▼
+Recipe
+   │
+   ├── Ingredient
+   ├── Quantity
+   └── Unit
+```
+
+When an order is completed, inventory consumption can be calculated from recipe definitions where the business rules require it.
+
+---
+
+# 24. Purchase Architecture
+
+Purchasing manages procurement from vendors.
+
+Typical flow:
+
+```text
+Vendor
+  ↓
+Purchase Order
+  ↓
+Purchase Items
+  ↓
+Receiving
+  ↓
+Inventory Increase
+  ↓
+Accounting
+```
+
+Purchase functionality should remain separate from inventory storage while providing integration points between them.
+
+---
+
+# 25. Reservation Architecture
+
+Reservation functionality connects customers, tables, and time slots.
+
+Conceptually:
+
+```text
+Customer
+   │
+   ▼
+Reservation
+   │
+   ├── Branch
+   ├── Date/Time
+   ├── Guest Count
+   ├── Table Assignment
+   └── Status
+```
+
+Table assignment belongs naturally to the reservation workflow when a reservation needs one or more specific tables.
+
+Table combinations can be used when multiple tables are combined for larger parties.
+
+---
+
+# 26. Tax Architecture
+
+Tax is designed as a reusable business component.
+
+Tax information may be applied to:
+
+```text
+Order
+OrderItem
+Purchase
+Expense
+Accounting
+```
+
+Tax calculations should be centralized rather than duplicated in every module.
+
+---
+
+# 27. Payment Architecture
+
+Payment functionality should support multiple payment methods.
+
+Example:
+
+```text
+Cash
+Card
+Bank
+Wallet
+Online Payment
+Other configured methods
+```
+
+Payment information should be separated from order business logic where possible.
+
+---
+
+# 28. Expense Architecture
+
+The expense module contains concepts such as:
+
+```text
+Expense
+ExpenseCategory
+ExpenseApproval
+ExpenseAttachment
+ExpenseRecurring
+ExpenseStatus
+ExpenseType
+```
+
+Typical flow:
+
+```text
+Expense Created
+      ↓
+Approval
+      ↓
+Approved / Rejected
+      ↓
+Accounting
+```
+
+---
+
+# 29. Accounting Architecture
+
+Accounting integrates with operational modules.
+
+Potential sources include:
+
+```text
+Sales
+Payments
+Purchases
+Expenses
+Taxes
+Payroll
+Refunds
+```
+
+Conceptually:
+
+```text
+Operational Modules
+        │
+        ▼
+Accounting Entries
+        │
+        ▼
+Financial Reports
+```
+
+Accounting should maintain an auditable history of financial transactions.
+
+---
+
+# 30. Employee and Attendance Architecture
+
+Employee management is separate from authentication.
+
+```text
+User
+  │
+  ▼
+Employee
+  │
+  ├── Role
+  ├── Branch
+  └── Employment Information
+```
+
+Attendance can then track:
+
+```text
+Employee
+   │
+   ▼
+Attendance
+   ├── Check In
+   ├── Check Out
+   └── Attendance Status
+```
+
+---
+
+# 31. Payroll Architecture
+
+Payroll depends on employee and attendance information.
+
+```text
+Employee
+   │
+   ├── Salary
+   ├── Attendance
+   └── Adjustments
+          │
+          ▼
+       Payroll
+          │
+          ▼
+      Accounting
+```
+
+---
+
+# 32. Customer and Loyalty Architecture
+
+Customers are separate from employees.
+
+```text
+Customer
+   │
+   ├── Orders
+   ├── Reservations
+   └── Loyalty
+```
+
+Loyalty may include:
+
+```text
+Points
+Rewards
+Transactions
+Redemptions
+```
+
+---
+
+# 33. Notification Architecture
+
+Notifications provide a common mechanism for:
+
+```text
+System notifications
+Order notifications
+Kitchen notifications
+Reservation notifications
+Payment notifications
+Administrative notifications
+```
+
+Realtime delivery can use WebSocket/SSE where appropriate.
+
+---
+
+# 34. Audit Architecture
+
+Important business and administrative actions should be auditable.
+
+Example:
+
+```text
+User
+  │
+  ▼
+Action
+  │
+  ▼
+Audit Log
+```
+
+Audit information may include:
+
+```text
+userId
+tenantId
+action
+module
+entityId
+timestamp
+oldValue
+newValue
+```
+
+Sensitive information should not be logged unnecessarily.
+
+---
+
+# 35. Reporting Architecture
+
+Reporting should consume information from operational modules rather than duplicating business logic.
+
+Potential reports:
+
+```text
+Sales
+Orders
+Products
+Inventory
+Purchases
+Expenses
+Taxes
+Employees
+Attendance
+Payroll
+Customers
+Reservations
+Accounting
+```
+
+For MongoDB-heavy reporting, aggregation pipelines can be implemented through custom repositories/services.
+
+---
+
+# 36. Subscription Architecture
+
+The SaaS platform supports subscription plans.
+
+Example plan limits:
+
+```text
+branchesLimit
+usersLimit
+menuItemsLimit
+ordersPerMonth
+monthlyPrice
+yearlyPrice
+```
+
+Conceptually:
+
+```text
+Restaurant
+   │
+   ▼
+Subscription
+   │
+   ▼
+Subscription Plan
+```
+
+Subscription rules should be enforced at the service/application layer before operations that exceed plan limits.
+
+---
+
+# 37. API Response Architecture
+
+The project uses common response wrappers such as:
+
+```text
+ApiResponse
+PageResponse
+```
+
+Typical paginated response:
+
+```json
+{
+  "content": [],
+  "page": 0,
+  "size": 20,
+  "totalElements": 100,
+  "totalPages": 5
+}
+```
+
+The exact response structure should remain consistent across modules.
+
+---
+
+# 38. Search Architecture
+
+Search-heavy modules should use a dedicated search criteria model.
+
+Example:
+
+```text
+OrganizationSearchCriteria
+BranchSearchCriteria
+TableSearchCriteria
+OrderSearchCriteria
+```
+
+Flow:
+
+```text
+Controller
+   ↓
+Handler
+   ↓
+Service
+   ↓
+Custom Repository
+   ↓
+MongoTemplate
+   ↓
+MongoDB
+```
+
+This supports:
+
+- Multiple filters
+- Pagination
+- Sorting
+- Text/search fields
+- Active/inactive filtering
+- Tenant filtering
+
+---
+
+# 39. MongoDB Relationships
+
+The project may use MongoDB references where appropriate, including `@DBRef`.
+
+Example:
+
+```text
+Organization
+   │
+   └── Branch
+```
+
+References should be used carefully because excessive document references can increase query complexity.
+
+For high-frequency operational data, embedding or storing stable IDs may be preferable depending on the access pattern.
+
+---
+
+# 40. UUID Architecture
+
+The system uses UUID identifiers.
+
+MongoDB UUID handling is explicitly configured using the standard UUID representation.
+
+Conceptually:
+
+```text
+Java UUID
+    ↓
+MongoDB UUID STANDARD
+```
+
+This avoids UUID codec/representation mismatches between Java and MongoDB.
+
+---
+
+# 41. Configuration Architecture
+
+The configuration layer includes responsibilities such as:
+
+```text
+config/
+│
+├── ApplicationInitializer
+├── JwtConfig
+├── MongoConfig
+├── MongoUuidConfig
+├── SecurityConfig
+├── SwaggerConfig
+├── WebSocketConfig
+├── RateLimiter
+└── RefreshTokenCleanupScheduler
+```
+
+Configuration should remain separate from business modules.
+
+---
+
+# 42. Security Architecture
+
+Security responsibilities include:
+
+```text
+Authentication
+Authorization
+Password hashing
+JWT validation
+Refresh token management
+Token invalidation
+Rate limiting
+Permission checks
+```
+
+Password storage must use BCrypt or another appropriate password hashing mechanism.
+
+Passwords must never be stored as plain text.
+
+---
+
+# 43. Token Invalidation
+
+The access/refresh token system uses token-versioning concepts.
+
+Conceptually:
+
+```text
+User
+ └── tokenVersion
+```
+
+When a logout/security invalidation operation requires it:
+
+```text
+tokenVersion++
+```
+
+Previously issued tokens with the old version can then be rejected.
+
+This provides a mechanism for invalidating tokens without relying solely on token expiration.
+
+---
+
+# 44. Frontend Architecture
+
+The React frontend is organized around pages, components, shared UI, API clients, and realtime services.
+
+Conceptually:
+
+```text
+src/
 │
 ├── components/
-│   ├── common/
-│   │   ├── Navbar.jsx
-│   │   ├── Sidebar.jsx
-│   │   ├── ProtectedRoute.jsx
-│   │   ├── LoadingSpinner.jsx
-│   │   └── ErrorBoundary.jsx
-│   │
-│   ├── layout/
-│   │   ├── MainLayout.jsx
-│   │   ├── AuthLayout.jsx
-│   │   └── DashboardLayout.jsx
-│   │
-│   ├── auth/
-│   │   ├── LoginForm.jsx
-│   │   ├── SignupForm.jsx
-│   │   ├── ForgotPasswordForm.jsx
-│   │   └── ChangePasswordForm.jsx
-│   │
-│   ├── organization/
-│   │   ├── OrganizationList.jsx
-│   │   ├── OrganizationForm.jsx
-│   │   └── OrganizationDetails.jsx
-│   │
-│   ├── branch/
-│   │   ├── BranchList.jsx
-│   │   ├── BranchForm.jsx
-│   │   └── BranchDetails.jsx
-│   │
-│   ├── user/
-│   │   ├── UserList.jsx
-│   │   ├── UserForm.jsx
-│   │   ├── UserProfile.jsx
-│   │   └── ChangePassword.jsx
-│   │
-│   ├── employee/
-│   │   ├── EmployeeList.jsx
-│   │   ├── EmployeeForm.jsx
-│   │   ├── EmployeeDetails.jsx
-│   │   └── EmployeeStats.jsx
-│   │
-│   ├── customer/
-│   │   ├── CustomerList.jsx
-│   │   ├── CustomerForm.jsx
-│   │   ├── CustomerDetails.jsx
-│   │   └── LoyaltyInfo.jsx
-│   │
-│   ├── menu/
-│   │   ├── MenuList.jsx
-│   │   ├── MenuForm.jsx
-│   │   ├── CategoryList.jsx
-│   │   ├── MenuItemForm.jsx
-│   │   ├── ModifierList.jsx
-│   │   └── ComboDealForm.jsx
-│   │
-│   ├── inventory/
-│   │   ├── InventoryList.jsx
-│   │   ├── StockMovement.jsx
-│   │   ├── StockAdjustment.jsx
-│   │   ├── LowStockAlerts.jsx
-│   │   └── InventoryForm.jsx
-│   │
-│   ├── purchase/
-│   │   ├── PurchaseList.jsx
-│   │   ├── CreatePurchase.jsx
-│   │   ├── PurchaseDetails.jsx
-│   │   └── PurchaseApproval.jsx
-│   │
-│   ├── supplier/
-│   │   ├── SupplierList.jsx
-│   │   ├── SupplierForm.jsx
-│   │   └── SupplierDetails.jsx
-│   │
-│   ├── table/
-│   │   ├── TableManagement.jsx
-│   │   ├── FloorView.jsx
-│   │   ├── TableStatusView.jsx
-│   │   ├── ReservationList.jsx
-│   │   └── ReservationForm.jsx
-│   │
-│   ├── order/
-│   │   ├── OrderList.jsx
-│   │   ├── CreateOrder.jsx
-│   │   ├── OrderDetails.jsx
-│   │   ├── OrderBilling.jsx
-│   │   ├── ApplyDiscount.jsx
-│   │   └── OrderHistory.jsx
-│   │
-│   ├── kitchen/
-│   │   ├── KitchenDisplay.jsx        # Real-time order display
-│   │   ├── KitchenOrderCard.jsx
-│   │   ├── OrderQueue.jsx
-│   │   ├── KitchenStats.jsx
-│   │   └── StationManagement.jsx
-│   │
-│   ├── delivery/
-│   │   ├── DeliveryList.jsx
-│   │   ├── DeliveryAssignment.jsx
-│   │   ├── DeliveryTracking.jsx
-│   │   └── DeliveryMap.jsx
-│   │
-│   ├── attendance/
-│   │   ├── AttendanceList.jsx
-│   │   ├── CheckInCheckOut.jsx
-│   │   ├── AttendanceReport.jsx
-│   │   └── BiometricSync.jsx
-│   │
-│   ├── payroll/
-│   │   ├── SalaryManagement.jsx
-│   │   ├── PayrollList.jsx
-│   │   ├── SalarySlipGenerator.jsx
-│   │   └── PayrollReport.jsx
-│   │
-│   ├── loyalty/
-│   │   ├── LoyaltyProgram.jsx
-│   │   ├── PointsManagement.jsx
-│   │   ├── RedeemPoints.jsx
-│   │   └── LoyaltyReport.jsx
-│   │
-│   ├── payment/
-│   │   ├── PaymentForm.jsx
-│   │   ├── PaymentGateway.jsx
-│   │   ├── RefundManagement.jsx
-│   │   ├── CashDrawer.jsx
-│   │   └── PaymentHistory.jsx
-│   │
-│   ├── reports/
-│   │   ├── SalesReport.jsx
-│   │   ├── InventoryReport.jsx
-│   │   ├── StaffReport.jsx
-│   │   ├── CustomerReport.jsx
-│   │   └── AnalyticsDashboard.jsx
-│   │
-│   └── settings/
-│       ├── GeneralSettings.jsx
-│       ├── SecuritySettings.jsx
-│       ├── NotificationSettings.jsx
-│       └── SystemSettings.jsx
-│
 ├── pages/
-│   ├── Dashboard.jsx
-│   ├── Login.jsx
-│   ├── Signup.jsx
-│   ├── NotFound.jsx
-│   └── Unauthorized.jsx
-│
-├── context/
-│   ├── AuthContext.jsx              # Authentication state
-│   ├── NotificationContext.jsx      # Global notifications
-│   ├── KitchenContext.jsx           # Real-time kitchen orders
-│   ├── OrderContext.jsx             # Order management state
-│   └── AppContext.jsx               # Global app state
-│
+├── layouts/
 ├── services/
-│   ├── api/
-│   │   ├── authApi.js               # Authentication API calls
-│   │   ├── organizationApi.js       # Organization API calls
-│   │   ├── branchApi.js             # Branch API calls
-│   │   ├── userApi.js               # User management API
-│   │   ├── employeeApi.js           # Employee API
-│   │   ├── customerApi.js           # Customer API
-│   │   ├── menuApi.js               # Menu management API
-│   │   ├── inventoryApi.js          # Inventory API
-│   │   ├── purchaseApi.js           # Purchase API
-│   │   ├── supplierApi.js           # Supplier API
-│   │   ├── orderApi.js              # Order API
-│   │   ├── billingApi.js            # Billing API
-│   │   ├── kitchenApi.js            # Kitchen API
-│   │   ├── deliveryApi.js           # Delivery API
-│   │   ├── attendanceApi.js         # Attendance API
-│   │   ├── payrollApi.js            # Payroll API
-│   │   ├── loyaltyApi.js            # Loyalty API
-│   │   ├── paymentApi.js            # Payment API
-│   │   ├── tableApi.js              # Table management API
-│   │   ├── reportsApi.js            # Reports API
-│   │   └── notificationApi.js       # Notifications API
-│   │
-│   ├── websocket/
-│   │   ├── kitchenSocket.js         # Kitchen WebSocket
-│   │   ├── deliverySocket.js        # Delivery tracking WebSocket
-│   │   └── notificationSocket.js    # Real-time notifications
-│   │
-│   ├── storage/
-│   │   ├── localStorage.js          # LocalStorage utilities
-│   │   └── sessionStorage.js        # SessionStorage utilities
-│   │
-│   └── utils/
-│       ├── axiosConfig.js           # Axios configuration
-│       ├── errorHandler.js          # API error handling
-│       ├── dateFormatter.js         # Date/time formatting
-│       ├── currencyFormatter.js     # Currency formatting
-│       └── validators.js            # Form validators
-│
 ├── hooks/
-│   ├── useAuth.js
-│   ├── useApi.js
-│   ├── useForm.js
-│   ├── useNotification.js
-│   ├── useKitchenSocket.js
-│   ├── useDeliveryTracking.js
-│   └── useLocalStorage.js
-│
-├── styles/
-│   ├── Auth.css
-│   ├── Dashboard.css
-│   ├── Menu.css
-│   ├── Order.css
-│   ├── Kitchen.css
-│   ├── Table.css
-│   ├── Report.css
-│   └── Common.css
-│
 ├── utils/
-│   ├── constants.js
-│   ├── enums.js
-│   ├── routes.js
-│   └── config.js
-│
-├── App.jsx
-├── main.jsx
-└── index.css
+├── context/
+├── routes/
+└── assets/
+```
+
+The frontend communicates with Spring Boot through REST APIs.
+
+---
+
+# 45. Frontend API Communication
+
+A shared Axios client should be used for backend communication.
+
+Conceptually:
+
+```text
+React Component
+      ↓
+API Service / Axios Client
+      ↓
+Spring Boot REST API
+```
+
+The shared client is responsible for common concerns such as:
+
+- Base URL
+- Authorization header
+- Refresh-token handling
+- Common error handling
+
+---
+
+# 46. Frontend Realtime Updates
+
+For SSE-enabled modules:
+
+```text
+React Page
+   │
+   ▼
+EventSource
+   │
+   ▼
+Spring Boot SSE Endpoint
+```
+
+Example:
+
+```text
+/api/branch/stream
+```
+
+When an event arrives:
+
+```text
+SSE Event
+   ↓
+React State Update
+   ↓
+UI Refresh
+```
+
+The goal is to update only the relevant UI state rather than reloading the entire browser page.
+
+---
+
+# 47. Error Handling
+
+The backend should provide consistent error responses.
+
+Errors should distinguish between:
+
+```text
+Validation Error
+Authentication Error
+Authorization Error
+Not Found
+Conflict
+Business Rule Violation
+Database Error
+Unexpected Server Error
+```
+
+Business exceptions should not expose internal stack traces to clients.
+
+---
+
+# 48. Validation
+
+Validation should occur at appropriate boundaries.
+
+```text
+API Input
+   ↓
+Validation
+   ↓
+Handler
+   ↓
+Service Business Rules
+```
+
+Examples:
+
+- Required fields
+- Email format
+- Numeric ranges
+- Duplicate business identifiers
+- Subscription limits
+- Tenant ownership
+- Valid entity relationships
+
+---
+
+# 49. Permission Enforcement
+
+Permission checks should exist at the backend, not only in the React UI.
+
+Frontend permission checks are useful for hiding unavailable actions:
+
+```text
+User Permission
+      ↓
+React UI
+```
+
+But the backend remains authoritative:
+
+```text
+Request
+   ↓
+Spring Security
+   ↓
+Permission Check
+   ↓
+Business Logic
+```
+
+A user must not gain access simply by manually calling an API endpoint.
+
+---
+
+# 50. Data Ownership and Tenant Security
+
+Every tenant-sensitive query must respect tenant boundaries.
+
+Bad:
+
+```text
+findById(id)
+```
+
+when the ID alone is not sufficient to establish tenant ownership.
+
+Preferred conceptual approach:
+
+```text
+findByIdAndTenantId(id, tenantId)
+```
+
+or equivalent tenant-aware repository/custom-query logic.
+
+This principle applies to:
+
+```text
+Organizations
+Branches
+Employees
+Customers
+Menus
+Tables
+Orders
+Inventory
+Purchases
+Expenses
+Reports
+and other tenant-owned resources
 ```
 
 ---
 
-## API Endpoints
+# 51. Auditability
 
-### Authentication
-- `POST /api/auth/login` - User login
-- `POST /api/auth/signup` - User registration
-- `POST /api/auth/refresh` - Refresh JWT token
-- `POST /api/auth/logout` - Logout
-- `POST /api/auth/forgot-password` - Password reset request
-- `POST /api/auth/reset-password` - Reset password
+Business-critical operations should be traceable.
 
-### Organization Management
-- `GET /api/organizations` - List all organizations
-- `GET /api/organizations/{id}` - Get organization details
-- `POST /api/organizations` - Create organization
-- `PUT /api/organizations/{id}` - Update organization
-- `DELETE /api/organizations/{id}` - Delete organization
+Examples:
 
-### Branch Management
-- `GET /api/branches` - List all branches
-- `GET /api/branches/{id}` - Get branch details
-- `POST /api/branches` - Create branch
-- `PUT /api/branches/{id}` - Update branch
-- `DELETE /api/branches/{id}` - Delete branch
+```text
+Who created the order?
+Who changed its status?
+Who modified a menu price?
+Who approved an expense?
+Who changed a user's permissions?
+Who deleted/reactivated a record?
+```
 
-### User Management
-- `GET /api/users` - List all users
-- `GET /api/users/{id}` - Get user details
-- `POST /api/users` - Create user
-- `PUT /api/users/{id}` - Update user
-- `DELETE /api/users/{id}` - Delete user
-- `POST /api/users/{id}/change-password` - Change password
-
-### Employee Management
-- `GET /api/employees` - List all employees
-- `GET /api/employees/{id}` - Get employee details
-- `POST /api/employees` - Create employee
-- `PUT /api/employees/{id}` - Update employee
-- `DELETE /api/employees/{id}` - Delete employee
-- `GET /api/employees/{id}/stats` - Get employee statistics
-
-### Customer Management
-- `GET /api/customers` - List all customers
-- `GET /api/customers/{id}` - Get customer details
-- `POST /api/customers` - Create customer
-- `PUT /api/customers/{id}` - Update customer
-- `DELETE /api/customers/{id}` - Delete customer
-
-### Menu Management
-- `GET /api/menu/categories` - List categories
-- `GET /api/menu/items` - List menu items
-- `POST /api/menu/items` - Create menu item
-- `PUT /api/menu/items/{id}` - Update menu item
-- `DELETE /api/menu/items/{id}` - Delete menu item
-- `GET /api/menu/modifiers` - List modifiers
-- `POST /api/menu/combo-deals` - Create combo deal
-
-### Inventory Management
-- `GET /api/inventory` - List inventory
-- `POST /api/inventory/adjust-stock` - Adjust stock
-- `GET /api/inventory/movements` - Stock movements
-- `GET /api/inventory/alerts` - Low stock alerts
-
-### Purchase Management
-- `GET /api/purchases` - List purchases
-- `POST /api/purchases` - Create purchase
-- `GET /api/purchases/{id}` - Get purchase details
-- `PUT /api/purchases/{id}` - Update purchase
-- `DELETE /api/purchases/{id}` - Delete purchase
-
-### Order Management
-- `GET /api/orders` - List orders
-- `POST /api/orders` - Create order
-- `GET /api/orders/{id}` - Get order details
-- `PUT /api/orders/{id}` - Update order
-- `PUT /api/orders/{id}/status` - Update order status
-- `DELETE /api/orders/{id}` - Cancel order
-- `POST /api/orders/{id}/apply-discount` - Apply discount
-- `GET /api/orders/{id}/billing` - Get billing details
-
-### Kitchen Operations (WebSocket)
-- `WS /ws/kitchen` - WebSocket connection for kitchen orders
-- `POST /api/kitchen/orders` - List kitchen orders
-- `PUT /api/kitchen/orders/{id}/status` - Update order status
-- `PUT /api/kitchen/stations/{id}/status` - Update station status
-
-### Table Management
-- `GET /api/tables` - List all tables
-- `GET /api/tables/{id}` - Get table details
-- `PUT /api/tables/{id}/status` - Update table status
-- `POST /api/reservations` - Create reservation
-- `GET /api/reservations` - List reservations
-- `PUT /api/reservations/{id}` - Update reservation
-
-### Delivery Management
-- `GET /api/deliveries` - List deliveries
-- `POST /api/deliveries/{id}/assign` - Assign delivery
-- `PUT /api/deliveries/{id}/status` - Update delivery status
-- `GET /api/deliveries/{id}/tracking` - Get delivery tracking
-
-### Payment Management
-- `POST /api/payments/process` - Process payment
-- `GET /api/payments` - List payments
-- `POST /api/payments/{id}/refund` - Process refund
-- `GET /api/cash-drawer` - Get cash drawer status
-- `POST /api/cash-drawer/reconcile` - Reconcile cash
-
-### Loyalty Program
-- `GET /api/loyalty/accounts/{customerId}` - Get loyalty account
-- `POST /api/loyalty/redeem` - Redeem points
-- `GET /api/loyalty/transactions` - Get transactions
-
-### Reports
-- `GET /api/reports/sales` - Sales report
-- `GET /api/reports/inventory` - Inventory report
-- `GET /api/reports/staff` - Staff performance report
-- `GET /api/reports/customers` - Customer analysis report
-
-### Attendance
-- `POST /api/attendance/check-in` - Employee check-in
-- `POST /api/attendance/check-out` - Employee check-out
-- `GET /api/attendance` - List attendance records
-- `GET /api/attendance/report` - Attendance report
-
-### Payroll
-- `GET /api/payroll/salaries` - List salaries
-- `POST /api/payroll/calculate` - Calculate payroll
-- `GET /api/payroll/slips/{id}` - Get salary slip
-- `GET /api/payroll/report` - Payroll report
+Audit logs should preserve enough information to investigate these operations.
 
 ---
 
-## Authentication & Authorization
+# 52. Module Dependency Principle
 
-### JWT Token Structure
-```json
-{
-  "header": {
-    "alg": "HS256",
-    "typ": "JWT"
-  },
-  "payload": {
-    "userId": "user_id",
-    "username": "username",
-    "roles": ["ADMIN", "MANAGER"],
-    "permissions": ["CREATE_ORDER", "MANAGE_INVENTORY"],
-    "organizationId": "org_id",
-    "branchId": "branch_id",
-    "iat": 1706000000,
-    "exp": 1706086400
-  },
-  "signature": "signature_hash"
-}
+Modules may depend on other modules through well-defined interfaces and IDs.
+
+Avoid uncontrolled circular dependencies.
+
+Example:
+
+```text
+Order
+ ├── Menu
+ ├── Customer
+ ├── Table
+ ├── Tax
+ ├── Payment
+ └── Kitchen
 ```
 
-### Role-Based Access Control (RBAC)
+But:
+
+```text
+Menu ↔ Order ↔ Inventory ↔ Menu
 ```
-ADMIN
-  - Manage organizations
-  - Manage branches
-  - Manage users & roles
-  - View all reports
-  - System configuration
 
-MANAGER
-  - Manage branch operations
-  - Manage inventory
-  - Manage staff
-  - View branch reports
-  - Approve transactions
+should not become a tightly coupled implementation cycle.
 
-STAFF_MANAGER
-  - Employee management
-  - Attendance tracking
-  - Payroll management
+Business dependencies should be deliberate.
 
-OPERATION_MANAGER
-  - Order management
-  - Kitchen operations
-  - Table management
-  - Delivery management
+---
 
-KITCHEN_CHEF
-  - View assigned orders
-  - Update order status
-  - Kitchen operations only
+# 53. Separation of Concerns
 
-DELIVERY_PARTNER
-  - View assigned deliveries
-  - Update delivery status
-  - Delivery tracking
+The project follows the principle:
 
-WAITER
-  - Create orders
-  - Update order status
-  - Manage tables
-  - View menu
+```text
+Controller
+    = HTTP
 
-CASHIER
-  - Process payments
-  - View billing details
-  - Cash management
+Handler
+    = Application orchestration
+
+Service
+    = Business logic
+
+Transformer
+    = Entity ↔ Model conversion
+
+Repository
+    = Database access
+
+Domain
+    = Persistence model
+
+Model
+    = API/application representation
+```
+
+This makes the application easier to test, maintain, and extend.
+
+---
+
+# 54. Recommended Module Dependency Overview
+
+```text
+                         ┌──────────────┐
+                         │ Subscription │
+                         └──────┬───────┘
+                                │
+                                ▼
+┌────────────┐          ┌──────────────┐
+│    Auth    │─────────▶│ Organization │
+└─────┬──────┘          └──────┬───────┘
+      │                         │
+      ▼                         ▼
+┌────────────┐             ┌────────┐
+│    User    │             │ Branch │
+└─────┬──────┘             └───┬────┘
+      │                        │
+      ▼                        ▼
+┌────────────┐           ┌──────────────┐
+│  Employee  │           │ Floor / Table│
+└────────────┘           └──────┬───────┘
+                                │
+                                ▼
+                         ┌────────────┐
+                         │Reservation │
+                         └─────┬──────┘
+                               │
+                               ▼
+                         ┌──────────┐
+                         │  Order   │
+                         └────┬─────┘
+                              │
+            ┌─────────────────┼──────────────────┐
+            ▼                 ▼                  ▼
+        ┌────────┐       ┌─────────┐        ┌─────────┐
+        │ Kitchen│       │ Payment │        │ Delivery│
+        └────────┘       └─────────┘        └─────────┘
+            │
+            ▼
+       ┌──────────┐
+       │ Inventory│◀──── Purchase ◀──── Vendor
+       └────┬─────┘
+            │
+            ▼
+        ┌────────┐
+        │ Recipe │◀──── Menu
+        └────────┘
+
+Operational Modules
+        │
+        ▼
+┌──────────────────────────────┐
+│ Tax / Expense / Accounting   │
+└──────────────┬───────────────┘
+               │
+               ▼
+           Reporting
 ```
 
 ---
 
-## WebSocket Communications
+# 55. Current Core Modules
 
-### Kitchen Operations Channel
-**Connection**: `WS /ws/kitchen`
+The project already contains or has been actively implementing concepts in these areas:
 
-**Subscription**: `SUBSCRIBE_KITCHEN_ORDERS`
-```json
-{
-  "action": "SUBSCRIBE",
-  "type": "KITCHEN_ORDERS"
-}
+```text
+Authentication
+Organization
+Branch
+User
+Employee
+Customer
+
+Role
+Permission
+RolePermission
+
+Subscription
+
+Menu
+Category
+MenuItem
+MenuVariant
+Modifier
+ModifierGroup
+MenuItemModifierGroup
+
+Floor
+Table
+TableStatusHistory
+TableCombination
+
+Order
+OrderItem
+OrderItemModifier
+OrderPayment
+OrderDiscount
+OrderTax
+OrderStatusHistory
+OrderDelivery
+OrderKitchenTicket
+OrderAttachment
+OrderRefund
+OrderSplit
+OrderSplitItem
+
+Expense
+ExpenseApproval
+ExpenseAttachment
+ExpenseCategory
+ExpenseRecurring
+ExpenseStatus
+ExpenseType
 ```
 
-**Message Format** (Server to Client):
-```json
-{
-  "type": "ORDER_ASSIGNED",
-  "data": {
-    "orderId": "order_123",
-    "items": [...],
-    "station": "grill",
-    "priority": "HIGH",
-    "timestamp": "2026-06-05T10:30:00Z"
-  }
-}
-```
+Additional modules are planned/being expanded around:
 
-**Client Actions**:
-- `ORDER_STARTED` - Chef starts preparing
-- `ORDER_READY` - Order is ready
-- `ORDER_DELAYED` - Order delayed with reason
-- `ORDER_URGENT` - Mark as urgent
-
-### Delivery Tracking Channel
-**Connection**: `WS /ws/delivery`
-
-**Real-time Location Updates**:
-```json
-{
-  "type": "LOCATION_UPDATE",
-  "deliveryId": "delivery_123",
-  "latitude": 28.6139,
-  "longitude": 77.2090,
-  "timestamp": "2026-06-05T10:30:00Z"
-}
-```
-
-### Notification Channel
-**Connection**: `WS /ws/notifications`
-
-**Broadcast Message**:
-```json
-{
-  "type": "ORDER_READY",
-  "message": "Order #123 is ready for pickup",
-  "priority": "HIGH",
-  "timestamp": "2026-06-05T10:30:00Z"
-}
-```
-
----
-
-## Database Schema Overview
-
-### Collections Structure
-
-#### users
-```javascript
-{
-  _id: ObjectId,
-  username: String (unique),
-  email: String (unique),
-  password: String (hashed),
-  firstName: String,
-  lastName: String,
-  phone: String,
-  status: ENUM,
-  roles: [ObjectId],
-  organizationId: ObjectId,
-  branchId: ObjectId,
-  profileImage: String,
-  lastLogin: Date,
-  createdAt: Date,
-  updatedAt: Date,
-  isDeleted: Boolean
-}
-```
-
-#### orders
-```javascript
-{
-  _id: ObjectId,
-  orderNumber: String (unique),
-  customerId: ObjectId,
-  tableId: ObjectId,
-  branchId: ObjectId,
-  items: [{
-    menuItemId: ObjectId,
-    quantity: Number,
-    price: Decimal,
-    modifiers: [ObjectId],
-    specialInstructions: String
-  }],
-  status: ENUM,
-  totalAmount: Decimal,
-  discounts: [{
-    discountId: ObjectId,
-    amount: Decimal
-  }],
-  tax: Decimal,
-  paymentStatus: ENUM,
-  deliveryType: ENUM (DINE_IN, TAKEAWAY, DELIVERY),
-  preparationTime: Number,
-  createdAt: Date,
-  updatedAt: Date,
-  completedAt: Date
-}
-```
-
-#### kitchen_orders
-```javascript
-{
-  _id: ObjectId,
-  orderId: ObjectId,
-  stationId: ObjectId,
-  items: [Object],
-  status: ENUM,
-  priority: ENUM,
-  assignedTo: ObjectId,
-  startedAt: Date,
-  completedAt: Date,
-  createdAt: Date,
-  updatedAt: Date
-}
+```text
+Vendor
+Recipe
+Inventory
+Purchase
+Reservation
+Kitchen
+Delivery
+Tax
+Accounting
+Attendance
+Payroll
+Loyalty
+Notification
+Audit
+Report
+Settings
 ```
 
 ---
 
-## Configuration Files
+# 56. Scalability Strategy
 
-### Backend Configuration (application.properties)
-```properties
-spring.application.name=restaurant-erp
-spring.data.mongodb.uri=mongodb://localhost:27017/restaurant_erp
-spring.data.mongodb.database=restaurant_erp
-server.port=8080
-server.servlet.context-path=/api
+The first implementation can remain a modular monolith.
 
-# JWT Configuration
-jwt.secret=${JWT_SECRET}
-jwt.expiration=86400000
-jwt.refreshExpiration=604800000
-
-# WebSocket
-server.servlet.session.tracking-modes=cookie
-spring.websocket.message-size=8192
-
-# File Upload
-file.upload-dir=${FILE_UPLOAD_DIR}
-file.max-size=10485760
-
-# Email Configuration
-mail.smtp.host=${MAIL_SMTP_HOST}
-mail.smtp.port=${MAIL_SMTP_PORT}
-mail.username=${MAIL_USERNAME}
-mail.password=${MAIL_PASSWORD}
+```text
+React
+   ↓
+Spring Boot Modular Monolith
+   ↓
+MongoDB
 ```
 
-### Frontend Configuration (vite.config.js)
-```javascript
-export default {
-  server: {
-    proxy: {
-      '/api': {
-        target: 'http://localhost:8080',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/api/, '')
-      },
-      '/ws': {
-        target: 'ws://localhost:8080',
-        ws: true,
-        changeOrigin: true
-      }
-    }
-  }
-}
+This is preferable to prematurely splitting every module into microservices.
+
+If the platform grows significantly, modules with independent scaling requirements can later be extracted.
+
+Potential candidates could include:
+
+```text
+Notification
+Reporting
+Kitchen realtime
+Payment processing
+Search
+```
+
+The initial architecture should therefore maintain clean module boundaries even while running as one application.
+
+---
+
+# 57. Performance Principles
+
+Important performance practices include:
+
+- Pagination for large collections
+- Indexed tenant IDs
+- Indexed frequently searched fields
+- Avoiding unbounded queries
+- MongoDB aggregation for reporting
+- Efficient projection when full documents are unnecessary
+- Realtime updates instead of unnecessary full-page reloads
+- Caching where justified
+- Avoiding excessive `@DBRef` traversal
+- Background processing for expensive operations
+
+---
+
+# 58. API Design Principles
+
+REST endpoints should follow consistent conventions.
+
+Examples:
+
+```text
+GET    /api/branch
+GET    /api/branch/{id}
+POST   /api/branch
+PUT    /api/branch/{id}
+DELETE /api/branch/{id}
+PATCH  /api/branch/{id}/restore
+GET    /api/branch/search
+GET    /api/branch/stream
+```
+
+Exact endpoint naming may vary by module, but consistency is required across the application.
+
+---
+
+# 59. Development Principles
+
+The project should follow:
+
+### Single Responsibility Principle
+
+Each class should have one clear responsibility.
+
+### Don't Repeat Yourself
+
+Common functionality should be reused instead of copied across modules.
+
+### Keep Controllers Thin
+
+Business logic belongs in services.
+
+### Keep Repositories Focused
+
+Database logic belongs in repositories/custom repositories.
+
+### Explicit Module Boundaries
+
+A module should expose only what other modules need.
+
+### Backend Is Authoritative
+
+Frontend permission checks must never replace backend authorization.
+
+### Tenant Isolation Is Mandatory
+
+Every tenant-owned operation must respect tenant boundaries.
+
+---
+
+# 60. Target Architecture
+
+The long-term target is:
+
+```text
+                         ┌──────────────────────┐
+                         │      Web Client      │
+                         │ React + Vite +       │
+                         │ Tailwind             │
+                         └──────────┬───────────┘
+                                    │
+                           REST / SSE / WS
+                                    │
+                                    ▼
+                    ┌─────────────────────────────┐
+                    │      Spring Boot API        │
+                    │                             │
+                    │ Authentication              │
+                    │ Authorization               │
+                    │ Tenant Context              │
+                    │                             │
+                    │ ┌─────────────────────────┐ │
+                    │ │ Modular Business Layer  │ │
+                    │ │                         │ │
+                    │ │ Organization / Branch    │ │
+                    │ │ User / Employee         │ │
+                    │ │ Menu / Recipe           │ │
+                    │ │ Inventory / Purchase    │ │
+                    │ │ Floor / Table           │ │
+                    │ │ Reservation / Order     │ │
+                    │ │ Kitchen / Delivery      │ │
+                    │ │ Tax / Payment           │ │
+                    │ │ Expense / Accounting    │ │
+                    │ │ Payroll / Loyalty       │ │
+                    │ │ Notification / Audit    │ │
+                    │ │ Reports / Settings      │ │
+                    │ └─────────────────────────┘ │
+                    └──────────────┬──────────────┘
+                                   │
+                                   ▼
+                         ┌───────────────────┐
+                         │     MongoDB       │
+                         │                   │
+                         │ Shared Database   │
+                         │ Shared Collections│
+                         │ tenantId isolation│
+                         └───────────────────┘
 ```
 
 ---
 
-## Development Roadmap
+# 61. Architecture Goal
 
-### Phase 1: Core Setup (Week 1-2)
-- [ ] Authentication system
-- [ ] Organization & Branch management
-- [ ] User & Role management
-- [ ] Basic menu management
+The architecture is designed to provide:
 
-### Phase 2: Operations (Week 3-5)
-- [ ] Order management system
-- [ ] Table management
-- [ ] Kitchen operations with WebSocket
-- [ ] Payment processing
+- Multi-tenant restaurant management
+- POS and order management
+- Branch management
+- Menu management
+- Table and reservation management
+- Kitchen operations
+- Inventory and purchasing
+- Employee and payroll management
+- Expenses and accounting
+- Customer and loyalty management
+- Subscription-based SaaS
+- RBAC and fine-grained permissions
+- Realtime operational updates
+- Auditable business operations
+- Scalable modular development
 
-### Phase 3: Advanced Features (Week 6-8)
-- [ ] Inventory management
-- [ ] Supplier & Purchase management
-- [ ] Delivery system
-- [ ] Loyalty program
+The core architectural rule is:
 
-### Phase 4: HR & Analytics (Week 9-10)
-- [ ] Attendance system
-- [ ] Payroll management
-- [ ] Comprehensive reports & analytics
-- [ ] Performance metrics
-
-### Phase 5: Deployment & Optimization (Week 11-12)
-- [ ] Performance optimization
-- [ ] Security hardening
-- [ ] Automated testing
-- [ ] Deployment configuration
-
----
-
-## Best Practices
-
-### Backend
-- Use dependency injection for all services
-- Implement proper exception handling with custom exceptions
-- Use DTOs for API requests/responses
-- Implement pagination for list endpoints
-- Add audit logging for critical operations
-- Use MongoDB indexes for frequently queried fields
-- Implement caching for frequently accessed data
-- Use WebSocket for real-time features
-- Validate all input data
-- Use transactions for critical operations
-
-### Frontend
-- Component composition and reusability
-- Custom hooks for logic reuse
-- Context API for state management
-- Error boundaries for error handling
-- Loading states and skeleton loaders
-- Form validation before submission
-- Proper error messages and user feedback
-- Responsive design with Tailwind CSS
-- WebSocket auto-reconnection with exponential backoff
-- Request debouncing and throttling
-
----
-
-## Security Considerations
-
-1. **JWT Token Management**
-   - Secure token storage in httpOnly cookies
-   - Token refresh mechanism
-   - Logout and token invalidation
-
-2. **Data Protection**
-   - Encrypt sensitive data at rest
-   - Use HTTPS for all communications
-   - Implement rate limiting
-   - Sanitize all user inputs
-
-3. **Access Control**
-   - Implement RBAC
-   - Endpoint-level authorization
-   - Field-level access control
-   - Audit logging for sensitive operations
-
-4. **API Security**
-   - CORS configuration
-   - Input validation and sanitization
-   - SQL injection prevention (N/A for MongoDB, but query injection prevention)
-   - CSRF protection
-
----
-
-End of Architecture Documentation
+```text
+Keep modules independent,
+keep layers responsible,
+keep tenant data isolated,
+keep security on the backend,
+and keep business logic out of controllers.
+```
