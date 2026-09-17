@@ -42,7 +42,7 @@ public class ApplicationInitializer implements CommandLineRunner {
 
     @Override
     public void run(String... args) {
-        String developerEmail = "devmasterslearningtech@gmail.com";
+        String developerEmail = "tehseen7735@gmail.com";
 
         if (userRepository.existsByEmail(developerEmail)) {
             return;
@@ -79,12 +79,12 @@ public class ApplicationInitializer implements CommandLineRunner {
                 organizationRepository.save(
                         Organization.builder()
                                 .id(UUID.randomUUID())
-                                .organizationName("DevMasters Learning Tech")
-                                .ownerName("Muhammad Danish")
-                                .contactNumber("03440359135")
-                                .email("devmasterslearningtech@gmail.com")
-                                .address("Near Millat College")
-                                .city("Ahmad Pur East")
+                                .organizationName("TM DEVOP")
+                                .ownerName("Tehseen Mohsin")
+                                .contactNumber("+92 300-4654714")
+                                .email("tehseen7735@gmail.com")
+                                .address("DHA Lahore")
+                                .city("Lahore")
                                 .country("Pakistan")
                                 .isActive(true)
                                 .subscriptionPlan(subscriptionPlan)
@@ -105,8 +105,8 @@ public class ApplicationInitializer implements CommandLineRunner {
                                 .branchName("Head Office")
                                 .branchCode("HO-001")
                                 .address("Main Office")
-                                .city("Ahmad Pur East")
-                                .phone("03441234567")
+                                .city("DHA Lahore")
+                                .phone("+92 300 4654714")
                                 .organization(organization)
                                 .isActive(true)
                                 .build()
@@ -168,9 +168,9 @@ public class ApplicationInitializer implements CommandLineRunner {
                         .id(UUID.randomUUID())
                         .username("developer")
                         .password(passwordEncoder.encode("Developer123"))
-                        .fullName("Engineer Muhammad")
+                        .fullName("Tehseen Mohsin")
                         .email(developerEmail)
-                        .phone("03440359135")
+                        .phone("+92 300 4654714")
                         .isActive(true)
                         .organization(organization)
                         .branch(branch)
@@ -180,10 +180,10 @@ public class ApplicationInitializer implements CommandLineRunner {
         userRepository.save(developer);
 
         System.out.println("=================================");
-        System.out.println("DevMasters Learning Tech INITIALIZATION COMPLETED");
+        System.out.println("RESTAURANT ERP INITIALIZATION COMPLETED");
         System.out.println("=================================");
         System.out.println("Username : developer");
-        System.out.println("Email    : devmasterslearningtech@gmail.com");
+        System.out.println("Email    : TEHSEEN7735@GMAIL.COM");
         System.out.println("Password : Developer123");
         System.out.println("Organization : " + organization.getOrganizationName());
         System.out.println("Branch       : " + branch.getBranchName());
